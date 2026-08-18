@@ -57,6 +57,27 @@ def get_shap_explainer(_model, model_name: str, _X_background: pd.DataFrame):
     return make_shap_explainer(_model, model_name, _X_background)
 
 
+def predict_tabular_batch(rows_df: pd.DataFrame) -> pd.DataFrame:
+    """Fast path for scoring many rows at once — skips SHAP entirely (that's
+    only worth computing for a single row someone's actually inspecting,
+    not for every row in a 500-patient CSV).
+    """
+    model, scaler, feature_names, _, source = load_tabular_assets()
+
+    scaled = pd.DataFrame(scaler.transform(rows_df[scaler.feature_names_in_]), columns=scaler.feature_names_in_)
+    X = scaled[feature_names]
+
+    proba = model.predict_proba(X)[:, 1]
+    out = pd.DataFrame({
+        "predicted_class": ["Malignant" if p >= 0.5 else "Benign" for p in proba],
+        "probability_malignant": proba.round(4),
+    })
+    out["risk_tier"] = pd.cut(
+        out["probability_malignant"], bins=[-0.01, 0.35, 0.65, 1.0], labels=["Low", "Moderate", "High"]
+    )
+    return out
+
+
 def predict_tabular(raw_feature_dict: dict) -> dict:
     model, scaler, feature_names, X_background, source = load_tabular_assets()
 
