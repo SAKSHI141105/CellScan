@@ -1,0 +1,39 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+.claude/
+
+# data (too large / regenerable)
+data/raw/*
+data/processed/*
+data/models/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/models/.gitkeep
+
+# trained artifacts
+*.h5
+*.pt
+*.pkl
+*.joblib
+
+# logs
+logs/
+*.log
+
+# notebooks checkpoints
+.ipynb_checkpoints/
+
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# streamlit
+.streamlit/secrets.toml
+
+reports/figures/*.png
+!reports/figures/.gitkeep

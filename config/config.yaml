@@ -1,0 +1,75 @@
+# Central config so paths/hyperparams don't get hardcoded into scripts.
+# Edit this instead of digging through source when tuning a run.
+
+paths:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  models_dir: data/models
+  figures_dir: reports/figures
+  # BreakHis / IDC patches go here — see README for the download step, they're
+  # too big to vendor in the repo.
+  image_root: data/raw/histopathology
+
+tabular:
+  target_col: diagnosis
+  test_size: 0.2
+  random_state: 42
+  cv_folds: 5
+  smote:
+    k_neighbors: 5
+  models:
+    logistic_regression:
+      C: [0.01, 0.1, 1, 10, 100]
+      penalty: ["l2"]
+      solver: ["lbfgs"]
+      max_iter: [2000]
+    random_forest:
+      n_estimators: [200, 400, 600]
+      max_depth: [null, 6, 10, 16]
+      min_samples_leaf: [1, 2, 4]
+    xgboost:
+      n_estimators: [200, 400]
+      max_depth: [3, 5, 7]
+      learning_rate: [0.01, 0.05, 0.1]
+      subsample: [0.8, 1.0]
+    svm:
+      C: [0.1, 1, 10, 100]
+      gamma: ["scale", "auto"]
+      kernel: ["rbf"]
+    mlp:
+      hidden_layer_sizes: [[64], [64, 32], [128, 64, 32]]
+      alpha: [0.0001, 0.001, 0.01]
+      learning_rate_init: [0.001, 0.01]
+  # RandomizedSearch is faster for the wider grids (rf/xgb); grid search is
+  # fine for the small ones. n_iter only matters for the randomized ones.
+  search_n_iter: 25
+
+image:
+  img_size: 224
+  channels: 1
+  batch_size: 32
+  epochs: 40
+  early_stopping_patience: 6
+  clahe_clip_limit: 2.0
+  clahe_tile_grid: [8, 8]
+  denoise_method: median   # gaussian | median
+  denoise_kernel: 3
+  augmentation:
+    rotation_range: 20
+    horizontal_flip: true
+    vertical_flip: true
+    zoom_range: 0.15
+    brightness_range: [0.85, 1.15]
+  transfer_backbone: resnet50   # resnet50 | efficientnetb0 | vgg16
+  fine_tune_last_n_layers: 20
+
+clustering:
+  kmeans_k: 2
+  dbscan_eps: 1.5
+  dbscan_min_samples: 5
+  pca_components: 10
+  tsne_perplexity: 30
+
+logging:
+  level: INFO
+  log_dir: logs
