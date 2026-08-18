@@ -1,0 +1,170 @@
+/* CellScan dashboard theme — deep clinical blue/teal, not Streamlit defaults.
+   Loaded once via st.markdown(..., unsafe_allow_html=True) from app.py. */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+
+:root {
+    --ink-900: #0b1f2a;
+    --ink-700: #14324a;
+    --ink-500: #3d5a70;
+    --teal-600: #0d7377;
+    --teal-500: #14a3a8;
+    --blue-700: #1d3557;
+    --blue-500: #457b9d;
+    --surface: #f6f9fb;
+    --surface-card: #ffffff;
+    --border: #dfe7ec;
+
+    --risk-low-bg: #e8f6ee;
+    --risk-low-fg: #1e7e46;
+    --risk-mid-bg: #fef6e6;
+    --risk-mid-fg: #a3690a;
+    --risk-high-bg: #fbebea;
+    --risk-high-fg: #b3261e;
+}
+
+html, body, [class*="css"] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--ink-900);
+}
+
+.stApp {
+    background: var(--surface);
+}
+
+/* kill the default streamlit top padding / hamburger clutter feel */
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+    max-width: 1180px;
+}
+
+section[data-testid="stSidebar"] {
+    background: var(--blue-700);
+}
+section[data-testid="stSidebar"] * {
+    color: #eef3f7 !important;
+}
+section[data-testid="stSidebar"] .stRadio label,
+section[data-testid="stSidebar"] a {
+    font-weight: 500;
+}
+
+h1, h2, h3 {
+    font-weight: 700;
+    color: var(--ink-900);
+    letter-spacing: -0.01em;
+}
+
+.cs-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.25rem;
+}
+.cs-brand-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--teal-500), var(--blue-700));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+.cs-brand-name {
+    font-weight: 700;
+    font-size: 1.15rem;
+    color: var(--ink-900);
+}
+.cs-brand-sub {
+    font-size: 0.72rem;
+    color: var(--ink-500);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+/* card component used across prediction results / metrics */
+.cs-card {
+    background: var(--surface-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    box-shadow: 0 1px 2px rgba(11, 31, 42, 0.04);
+    margin-bottom: 1rem;
+}
+.cs-card h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-500);
+}
+
+.cs-risk-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.85rem;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+.cs-risk-low { background: var(--risk-low-bg); color: var(--risk-low-fg); }
+.cs-risk-mid { background: var(--risk-mid-bg); color: var(--risk-mid-fg); }
+.cs-risk-high { background: var(--risk-high-bg); color: var(--risk-high-fg); }
+
+.cs-score-number {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 2.4rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.cs-subtle {
+    color: var(--ink-500);
+    font-size: 0.88rem;
+}
+
+.cs-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1.5rem 0;
+}
+
+.cs-disclaimer {
+    background: #fff8ec;
+    border: 1px solid #f0dfb8;
+    border-radius: 10px;
+    padding: 0.9rem 1.1rem;
+    font-size: 0.85rem;
+    color: #6b5210;
+}
+
+/* buttons */
+.stButton > button {
+    background: var(--blue-700);
+    color: white;
+    border-radius: 8px;
+    border: none;
+    padding: 0.5rem 1.3rem;
+    font-weight: 600;
+    transition: background 0.15s ease;
+}
+.stButton > button:hover {
+    background: var(--teal-600);
+    color: white;
+}
+
+/* tabs */
+button[data-baseweb="tab"] {
+    font-weight: 600;
+    color: var(--ink-500);
+}
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: var(--teal-600);
+}
+
+footer, #MainMenu {visibility: hidden;}
