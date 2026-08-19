@@ -3,7 +3,7 @@
 A two-pipeline breast tissue classification system — one path over the Wisconsin
 Diagnostic Breast Cancer (WDBC) tabular dataset, one path over histopathology
 image patches — with supervised and unsupervised models on both sides, SHAP/LIME/
-Grad-CAM explanations, and a Streamlit dashboard that ties it together.
+Grad-CAM explanations, and a FastAPI + React frontend that ties it together.
 
 This is a research/portfolio project. It is **not a diagnostic tool** — see
 [Ethical disclaimer](#ethical-disclaimer) below and the About page in the dashboard.
@@ -66,6 +66,8 @@ populate from that run.
 
 ## Setup
 
+Python side:
+
 ```bash
 python -m venv .venv
 source .venv/Scripts/activate   # .venv/bin/activate on macOS/Linux
@@ -77,6 +79,13 @@ or with conda:
 ```bash
 conda env create -f environment.yml
 conda activate cellscan
+```
+
+Frontend side (Node 20+):
+
+```bash
+cd frontend
+npm install
 ```
 
 No dataset download is required for the tabular pipeline — it falls back to
@@ -93,24 +102,32 @@ python -m scripts.eda_tabular
 # clustering, 5-model tuning + ensembles, saves everything to data/models/tabular/
 python -m scripts.train_tabular
 
-# regenerate the ROC comparison plot without re-tuning
-python -m scripts.evaluate_models
-
 # image pipeline (needs the dataset — see below)
 python -m scripts.train_image
 
 # unit tests
 pytest
-
-# dashboard
-streamlit run src/dashboard/app.py
 ```
 
-The dashboard's Clinical Data tab works immediately even before you've run
-`train_tabular.py` — it falls back to a quick untuned RandomForest trained
-in-memory so `streamlit run` is never a dead end on a fresh clone. Run the
-real training script for the tuned ensemble + SHAP explanations backed by the
-actual saved model.
+The app is two processes: a FastAPI backend serving the ML pipelines, and a
+Vite/React frontend. Run both, in two terminals:
+
+```bash
+# terminal 1 — API on :8000
+uvicorn src.api.main:app --reload --port 8000
+
+# terminal 2 — frontend on :5173 (proxies /api/* to :8000, see frontend/vite.config.ts)
+cd frontend
+npm run dev
+```
+
+Then open `http://localhost:5173`. The Clinical Data page works immediately
+even before you've run `train_tabular.py` — the API falls back to a quick
+untuned RandomForest trained in-memory so the app is never a dead end on a
+fresh clone. Run the real training script for the tuned ensemble + SHAP
+explanations backed by the actual saved model. The Model Performance and
+Cluster Explorer pages read from `reports/figures/` and the saved models
+respectively, so they populate once `train_tabular.py` has run.
 
 ### Image dataset setup
 
@@ -139,11 +156,20 @@ src/
   models/                    clustering, autoencoders, the 5-model tabular zoo,
                               custom CNN + transfer learning
   explainability/            SHAP + LIME (tabular), Grad-CAM (image)
-  dashboard/                 Streamlit app — app.py + pages/, plus model_service.py
-                              (load-or-fallback model logic) and report.py (PDF/CSV export)
+  services/                  framework-agnostic prediction + explanation logic
+                              (tabular_service, image_service, report_service) —
+                              the layer the API calls into
+  api/                       FastAPI app — main.py + routers/ (tabular, image,
+                              reports, clusters)
   utils/                     config loader, logging, shared metrics
-scripts/                     entry points — eda_tabular, train_tabular, train_image,
-                              evaluate_models
+frontend/                    React + TypeScript + Vite + Tailwind UI
+  src/pages/                 one file per route (clinical data, upload image,
+                              model performance, cluster explorer, about)
+  src/components/ui/         hand-rolled component primitives (button, card,
+                              tabs, table, dropzone, animated number, spotlight card)
+  src/contexts/theme-context.tsx   light/dark/system theme provider
+  src/lib/api.ts             typed fetch wrappers around the FastAPI routes
+scripts/                     entry points — eda_tabular, train_tabular, train_image
 tests/                       unit tests for the preprocessing functions
 reports/figures/             generated EDA plots + metrics CSVs (gitignored contents,
                               folder tracked)
@@ -158,8 +184,8 @@ error"`; the Kaggle WDBC CSV people usually reach for uses `radius_mean` /
 `concave_points_worst` / `radius_se`. Rather than picking one convention and
 making the other loader match it downstream, `tabular_preprocessing.py`
 normalizes sklearn's names to the Kaggle convention at load time — every other
-module (feature selection, the dashboard form, the EDA script) only ever sees
-one naming scheme.
+module (feature selection, the clinical-data form, the EDA script) only ever
+sees one naming scheme.
 
 **Recall as the tuning objective, not accuracy or F1.** All five
 GridSearch/RandomizedSearch calls use `scoring="recall"`. On a class-balanced
@@ -197,19 +223,45 @@ on the full mixed set would just teach the network to reconstruct everything
 equally well, and the anomaly signal disappears — this only works because we
 deliberately withhold the malignant class during training.
 
-**The dashboard's fallback tabular model.** `model_service.py` trains an
-in-memory RandomForest if `data/models/tabular/ensemble_voting.joblib`
+**The API's fallback tabular model.** `src/services/tabular_service.py`
+trains an in-memory RandomForest if `data/models/tabular/ensemble_voting.joblib`
 doesn't exist yet. This is flagged with a TODO in the code — it's a
-reasonable call for making `streamlit run` never be a dead end on a fresh
-clone, but it's exactly the kind of implicit fallback you'd strip out before
-anything resembling a real deployment, where "which model produced this
-number" needs to be an unambiguous, auditable fact.
+reasonable call for making the app never be a dead end on a fresh clone, but
+it's exactly the kind of implicit fallback you'd strip out before anything
+resembling a real deployment, where "which model produced this number" needs
+to be an unambiguous, auditable fact.
 
 **fpdf2 over a browser-rendered PDF library.** The downloadable report uses
 fpdf2 instead of, say, WeasyPrint or a headless-Chrome HTML-to-PDF route.
 fpdf2 is pure Python with no system dependency (no wkhtmltopdf binary, no
 Chromium), which matters more for "this has to work with one pip install on
 someone else's machine" than the layout flexibility we're giving up.
+
+**A real React frontend instead of Streamlit.** This started as a Streamlit
+app, which is genuinely the right call for a fast internal ML demo — but it
+caps out on UI quality (you're styling Streamlit's own DOM with injected CSS,
+which only goes so far, and there's no way to run real component libraries
+inside it). Once polished UI with proper light/dark/system theming became a
+requirement, the honest fix was separating concerns properly: FastAPI serves
+the ML pipelines as a JSON API (`src/api/`), and a Vite/React/TypeScript
+frontend (`frontend/`) consumes it — the same architecture split you'd expect
+on an actual product team, and the only way to get real animated components
+and theme control instead of a styled-Streamlit ceiling. The ML/explainability
+code in `src/` didn't need to change for this — only the code that used to
+import `streamlit` directly moved into a framework-agnostic `src/services/`
+layer that both the API and the training scripts can call.
+
+**Two Python processes' worth of numpy had to agree.** Partway through
+building the API, `joblib.load()` on the saved tabular models started
+throwing `ValueError: <class 'numpy.random._mt19937.MT19937'> is not a known
+BitGenerator`. Cause: the models had been pickled under whatever numpy got
+resolved on an earlier `pip install` (2.x), and installing TensorFlow
+afterward silently downgraded numpy to `<2.0` to satisfy its own pin —
+breaking numpy's internal RandomState pickle format compatibility between the
+two major versions. Fix was just re-running `train_tabular.py` against the
+now-stable, `requirements.txt`-pinned environment; worth calling out because
+it's a real failure mode of installing ML dependencies incrementally rather
+than all at once from a lockfile.
 
 ## Testing
 

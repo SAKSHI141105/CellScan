@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: 210 33% 98%;
+  --foreground: 205 58% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 205 58% 10%;
+  --border: 205 20% 88%;
+  --muted: 205 25% 95%;
+  --muted-foreground: 205 15% 42%;
+
+  --primary: 183 82% 25%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 182 76% 37%;
+  --accent-foreground: 0 0% 100%;
+
+  --sidebar: 213 47% 20%;
+  --sidebar-foreground: 210 30% 94%;
+  --sidebar-active: 213 40% 28%;
+
+  --risk-low-bg: 150 55% 94%;
+  --risk-low-fg: 152 60% 28%;
+  --risk-mid-bg: 42 90% 94%;
+  --risk-mid-fg: 32 75% 36%;
+  --risk-high-bg: 4 70% 95%;
+  --risk-high-fg: 3 65% 44%;
+
+  --ring: 183 82% 25%;
+}
+
+.dark {
+  --background: 208 38% 8%;
+  --foreground: 210 30% 94%;
+  --card: 209 34% 11%;
+  --card-foreground: 210 30% 94%;
+  --border: 208 22% 20%;
+  --muted: 208 26% 14%;
+  --muted-foreground: 208 15% 65%;
+
+  --primary: 182 70% 45%;
+  --primary-foreground: 208 38% 8%;
+  --accent: 182 65% 50%;
+  --accent-foreground: 208 38% 8%;
+
+  --sidebar: 210 40% 7%;
+  --sidebar-foreground: 210 25% 88%;
+  --sidebar-active: 209 34% 15%;
+
+  --risk-low-bg: 152 40% 14%;
+  --risk-low-fg: 150 55% 68%;
+  --risk-mid-bg: 38 55% 15%;
+  --risk-mid-fg: 42 85% 68%;
+  --risk-high-bg: 4 45% 16%;
+  --risk-high-fg: 4 70% 70%;
+
+  --ring: 182 70% 45%;
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-border: hsl(var(--border));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-active: hsl(var(--sidebar-active));
+  --color-risk-low-bg: hsl(var(--risk-low-bg));
+  --color-risk-low-fg: hsl(var(--risk-low-fg));
+  --color-risk-mid-bg: hsl(var(--risk-mid-bg));
+  --color-risk-mid-fg: hsl(var(--risk-mid-fg));
+  --color-risk-high-bg: hsl(var(--risk-high-bg));
+  --color-risk-high-fg: hsl(var(--risk-high-fg));
+  --color-ring: hsl(var(--ring));
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans);
+  }
+}
+
+.font-mono-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}

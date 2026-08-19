@@ -62,10 +62,19 @@ def top_contributors_for_sample(shap_vals_row: np.ndarray, feature_names: list[s
     return df.sort_values("abs_shap", ascending=False).head(top_k).drop(columns="abs_shap")
 
 
-def plain_language_summary(top_contrib_df: pd.DataFrame, predicted_class: str) -> str:
-    """Turns the top SHAP contributors into a sentence for non-technical dashboard users."""
-    pushing_up = top_contrib_df[top_contrib_df["shap_value"] > 0]["feature"].tolist()
-    pushing_down = top_contrib_df[top_contrib_df["shap_value"] < 0]["feature"].tolist()
+def plain_language_summary(top_contributors, predicted_class: str) -> str:
+    """Turns the top SHAP contributors into a sentence for non-technical users.
+    Accepts either a DataFrame (feature/shap_value columns) or a list of
+    {"feature", "shap_value", ...} dicts — the API layer works with plain
+    dicts so it doesn't need pandas on its response path.
+    """
+    if isinstance(top_contributors, pd.DataFrame):
+        records = top_contributors.to_dict(orient="records")
+    else:
+        records = top_contributors
+
+    pushing_up = [r["feature"] for r in records if r["shap_value"] > 0]
+    pushing_down = [r["feature"] for r in records if r["shap_value"] < 0]
 
     def _fmt(names):
         cleaned = [n.replace("_", " ") for n in names[:2]]

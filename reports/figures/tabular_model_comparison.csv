@@ -1,7 +1,7 @@
 ,accuracy,precision,recall,f1,roc_auc
 logistic_regression,0.9737,0.9756,0.9524,0.9639,0.9967
-ensemble_voting,0.9825,1.0,0.9524,0.9756,0.9911
 mlp,0.9737,0.9756,0.9524,0.9639,0.9911
+ensemble_voting,0.9825,1.0,0.9524,0.9756,0.9911
 ensemble_stacking,0.9825,1.0,0.9524,0.9756,0.9911
 random_forest,0.9649,0.975,0.9286,0.9512,0.9954
 xgboost,0.9649,0.975,0.9286,0.9512,0.9907

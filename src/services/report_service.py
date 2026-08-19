@@ -1,5 +1,5 @@
-"""Downloadable prediction report — CSV always, PDF via fpdf2 (pure-python,
-no system dependency like wkhtmltopdf, which matters for a one-command deploy).
+"""Downloadable prediction report (CSV + PDF). Pure-python PDF via fpdf2 —
+no wkhtmltopdf/Chromium dependency, which matters for a one-command deploy.
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ class _ReportPDF(FPDF):
         self.ln(4)
 
 
-def build_pdf_report(result: dict, source: str, top_contributors: pd.DataFrame | None = None) -> bytes:
+def build_pdf_report(result: dict, source: str, top_contributors: list[dict] | None = None) -> bytes:
     pdf = _ReportPDF()
     pdf.add_page()
 
@@ -45,12 +45,12 @@ def build_pdf_report(result: dict, source: str, top_contributors: pd.DataFrame |
     pdf.cell(0, 12, f"{result['predicted_class']}  ({result['probability_malignant']*100:.1f}% malignancy probability)", ln=True)
     pdf.ln(4)
 
-    if top_contributors is not None and len(top_contributors):
+    if top_contributors:
         pdf.set_font("Helvetica", "B", 11)
         pdf.set_text_color(11, 31, 42)
         pdf.cell(0, 8, "Top contributing features (SHAP)", ln=True)
         pdf.set_font("Helvetica", "", 10)
-        for _, row in top_contributors.iterrows():
+        for row in top_contributors:
             direction = "raises" if row["shap_value"] > 0 else "lowers"
             pdf.cell(0, 6, f"  - {row['feature']}: value={row['value']:.3f} ({direction} malignancy score)", ln=True)
         pdf.ln(4)

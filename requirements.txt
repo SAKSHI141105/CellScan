@@ -24,9 +24,10 @@ lime>=0.2.0.1
 # Dimensionality reduction
 umap-learn>=0.5
 
-# Dashboard
-streamlit>=1.32
-plotly>=5.18
+# API backend (serves the React frontend under frontend/)
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
 fpdf2>=2.7
 
 # Viz (EDA + static report figures)
