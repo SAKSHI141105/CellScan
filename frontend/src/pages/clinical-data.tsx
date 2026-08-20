@@ -37,8 +37,44 @@ function ShapBars({ contributors }: { contributors: TopContributor[] }) {
   );
 }
 
-function ResultPanel({ result, source }: { result: TabularPredictResult; source: string }) {
+function LimeBars({ weights }: { weights: { feature: string; weight: number }[] }) {
+  const max = Math.max(...weights.map((w) => Math.abs(w.weight)), 0.001);
+  return (
+    <div className="space-y-2">
+      {weights.map((w) => {
+        const pct = (Math.abs(w.weight) / max) * 100;
+        const positive = w.weight > 0;
+        return (
+          <div key={w.feature} className="flex items-center gap-3 text-xs">
+            <span className="w-48 shrink-0 truncate text-muted-foreground" title={w.feature}>
+              {w.feature}
+            </span>
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className={`h-full rounded-full ${positive ? "bg-risk-high-fg" : "bg-risk-low-fg"}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <span className="w-14 shrink-0 font-mono-num text-right">{w.weight.toFixed(3)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ResultPanel({
+  result,
+  source,
+  features,
+}: {
+  result: TabularPredictResult;
+  source: string;
+  features: Record<string, number>;
+}) {
   const [downloading, setDownloading] = useState<"csv" | "pdf" | null>(null);
+  const [limeWeights, setLimeWeights] = useState<{ feature: string; weight: number }[] | null>(null);
+  const [limeLoading, setLimeLoading] = useState(false);
 
   async function download(kind: "csv" | "pdf") {
     setDownloading(kind);
@@ -48,6 +84,16 @@ function ResultPanel({ result, source }: { result: TabularPredictResult; source:
       triggerDownload(blob, `cellscan_report.${kind}`);
     } finally {
       setDownloading(null);
+    }
+  }
+
+  async function runLime() {
+    setLimeLoading(true);
+    try {
+      const res = await tabularApi.explainLime(features);
+      setLimeWeights(res.weights);
+    } finally {
+      setLimeLoading(false);
     }
   }
 
@@ -70,14 +116,35 @@ function ResultPanel({ result, source }: { result: TabularPredictResult; source:
           </Button>
         </div>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Top contributing features (SHAP)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ShapBars contributors={result.top_contributors} />
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Top contributing features (SHAP)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ShapBars contributors={result.top_contributors} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>LIME — independent local check</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {limeWeights ? (
+              <LimeBars weights={limeWeights} />
+            ) : (
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  A second, model-agnostic explanation for this same prediction.
+                </p>
+                <Button size="sm" variant="secondary" loading={limeLoading} onClick={runLime}>
+                  Run LIME
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
@@ -158,7 +225,7 @@ export function ClinicalData() {
               {manualError && <p className="text-sm text-risk-high-fg">{manualError}</p>}
               {manualResult && (
                 <div className="pt-2">
-                  <ResultPanel result={manualResult} source="manual clinical entry" />
+                  <ResultPanel result={manualResult} source="manual clinical entry" features={values} />
                 </div>
               )}
             </div>
@@ -181,6 +248,7 @@ function BatchUpload({ allFeatures }: { allFeatures: string[] }) {
   const [batch, setBatch] = useState<{ rows: Record<string, unknown>[]; n_malignant: number; n_benign: number } | null>(null);
   const [selectedRow, setSelectedRow] = useState<number>(0);
   const [rowResult, setRowResult] = useState<TabularPredictResult | null>(null);
+  const [rowFeatures, setRowFeatures] = useState<Record<string, number> | null>(null);
   const [rowLoading, setRowLoading] = useState(false);
 
   async function handleFiles(files: File[]) {
@@ -208,6 +276,7 @@ function BatchUpload({ allFeatures }: { allFeatures: string[] }) {
     try {
       const result = await tabularApi.predict(features);
       setRowResult(result);
+      setRowFeatures(features);
     } finally {
       setRowLoading(false);
     }
@@ -290,7 +359,9 @@ function BatchUpload({ allFeatures }: { allFeatures: string[] }) {
             </Button>
           </div>
 
-          {rowResult && <ResultPanel result={rowResult} source={`batch row ${selectedRow}`} />}
+          {rowResult && rowFeatures && (
+            <ResultPanel result={rowResult} source={`batch row ${selectedRow}`} features={rowFeatures} />
+          )}
         </div>
       )}
     </div>

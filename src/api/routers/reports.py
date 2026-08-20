@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import joblib
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Response
-from sklearn.metrics import auc
+from sklearn.metrics import auc, confusion_matrix
 
 from src.api.schemas import ReportRequest
 from src.data_preprocessing.tabular_preprocessing import clean_tabular, load_raw_tabular, scale_features, train_test_split_tabular
@@ -25,6 +26,30 @@ def _read_csv_or_404(path, name: str):
     return pd.read_csv(path, index_col=0)
 
 
+def _load_test_set_and_models() -> tuple[pd.DataFrame, pd.Series, dict]:
+    """Shared by roc_curves/confusion_matrices — both need the same held-out
+    split plus whichever trained models are on disk, just scored differently.
+    """
+    features_path = TABULAR_MODELS_DIR / "selected_features.joblib"
+    if not features_path.exists():
+        raise HTTPException(404, "No trained models found — run scripts/train_tabular.py first.")
+
+    df = clean_tabular(load_raw_tabular())
+    X_train, X_test, y_train, y_test = train_test_split_tabular(df)
+    _, X_test_scaled, _ = scale_features(X_train, X_test)
+
+    selected = joblib.load(features_path)
+    X_test_sel = X_test_scaled[selected]
+
+    models = {}
+    for name in _MODEL_ORDER:
+        model_path = TABULAR_MODELS_DIR / f"{name}.joblib"
+        if model_path.exists():
+            models[name] = joblib.load(model_path)
+
+    return X_test_sel, y_test, models
+
+
 @router.get("/reports/tabular-comparison")
 def tabular_comparison():
     df = _read_csv_or_404(FIGURES_DIR / "tabular_model_comparison.csv", "Model comparison")
@@ -45,25 +70,10 @@ def clustering_summary():
 
 @router.get("/reports/roc-curves")
 def roc_curves():
-    df = clean_tabular(load_raw_tabular())
-    X_train, X_test, y_train, y_test = train_test_split_tabular(df)
-    _, X_test_scaled, _ = scale_features(X_train, X_test)
-
-    features_path = TABULAR_MODELS_DIR / "selected_features.joblib"
-    if not features_path.exists():
-        raise HTTPException(404, "No trained models found — run scripts/train_tabular.py first.")
-
-    import joblib
-
-    selected = joblib.load(features_path)
-    X_test_sel = X_test_scaled[selected]
+    X_test_sel, y_test, models = _load_test_set_and_models()
 
     curves = []
-    for name in _MODEL_ORDER:
-        model_path = TABULAR_MODELS_DIR / f"{name}.joblib"
-        if not model_path.exists():
-            continue
-        model = joblib.load(model_path)
+    for name, model in models.items():
         y_proba = model.predict_proba(X_test_sel)[:, 1]
         fpr, tpr = roc_points(y_test, y_proba)
         # downsample to keep the payload small — the curve is smooth enough that
@@ -76,6 +86,23 @@ def roc_curves():
         })
 
     return {"curves": curves}
+
+
+@router.get("/reports/confusion-matrices")
+def confusion_matrices():
+    X_test_sel, y_test, models = _load_test_set_and_models()
+
+    matrices = []
+    for name, model in models.items():
+        y_pred = model.predict(X_test_sel)
+        # ravel order for a binary confusion_matrix is [[tn, fp], [fn, tp]]
+        tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+        matrices.append({
+            "name": name,
+            "tn": int(tn), "fp": int(fp), "fn": int(fn), "tp": int(tp),
+        })
+
+    return {"matrices": matrices}
 
 
 @router.post("/report/csv")

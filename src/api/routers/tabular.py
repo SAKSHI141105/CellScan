@@ -63,3 +63,12 @@ def explain_row(payload: TabularPredictRequest):
     drilling into one row from a batch result — behaviorally identical.
     """
     return predict(payload)
+
+
+@router.post("/explain-lime")
+def explain_lime(payload: TabularPredictRequest):
+    missing = [f for f in tabular_service.ALL_FEATURES if f not in payload.features]
+    if missing:
+        raise HTTPException(422, f"Missing features: {', '.join(missing)}")
+
+    return {"weights": tabular_service.explain_with_lime(payload.features)}

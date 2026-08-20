@@ -55,6 +55,13 @@ export const tabularApi = {
       handle<{ rows: Record<string, unknown>[]; n_rows: number; n_malignant: number; n_benign: number }>(r)
     );
   },
+
+  explainLime: (features: Record<string, number>) =>
+    fetch(`${BASE}/tabular/explain-lime`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ features }),
+    }).then((r) => handle<{ weights: { feature: string; weight: number }[] }>(r)),
 };
 
 export interface ImagePredictResult {
@@ -99,11 +106,20 @@ export interface RocCurve {
   points: { fpr: number; tpr: number }[];
 }
 
+export interface ConfusionMatrix {
+  name: string;
+  tn: number;
+  fp: number;
+  fn: number;
+  tp: number;
+}
+
 export const reportsApi = {
   tabularComparison: () => fetch(`${BASE}/reports/tabular-comparison`).then((r) => handle<{ models: ModelMetrics[] }>(r)),
   smoteComparison: () => fetch(`${BASE}/reports/smote-comparison`).then((r) => handle<{ rows: Record<string, unknown>[] }>(r)),
   clusteringSummary: () => fetch(`${BASE}/reports/clustering-summary`).then((r) => handle<{ methods: Record<string, unknown>[] }>(r)),
   rocCurves: () => fetch(`${BASE}/reports/roc-curves`).then((r) => handle<{ curves: RocCurve[] }>(r)),
+  confusionMatrices: () => fetch(`${BASE}/reports/confusion-matrices`).then((r) => handle<{ matrices: ConfusionMatrix[] }>(r)),
 
   downloadCsv: (payload: { predicted_class: string; probability_malignant: number; source: string; top_contributors?: TopContributor[] }) =>
     fetch(`${BASE}/report/csv`, {

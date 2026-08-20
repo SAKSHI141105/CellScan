@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 from src.data_preprocessing.tabular_preprocessing import clean_tabular, load_raw_tabular, scale_features, train_test_split_tabular
-from src.explainability.tabular_explain import make_shap_explainer, shap_values_for, top_contributors_for_sample
+from src.explainability.tabular_explain import lime_explain_instance, make_lime_explainer, make_shap_explainer, shap_values_for, top_contributors_for_sample
 from src.utils.config import PROJECT_ROOT, load_config
 from src.utils.logging_setup import get_logger
 
@@ -75,6 +75,31 @@ def _get_explainer():
     explainer = make_shap_explainer(model, "ensemble_voting", X_background)
     _cache["explainer"] = explainer
     return explainer
+
+
+def _get_lime_explainer():
+    if "lime_explainer" in _cache:
+        return _cache["lime_explainer"]
+    _, _, _, X_background, _ = _load_assets()
+    explainer = make_lime_explainer(X_background)
+    _cache["lime_explainer"] = explainer
+    return explainer
+
+
+def explain_with_lime(raw_feature_dict: dict, num_features: int = 6) -> list[dict]:
+    """Second, model-agnostic opinion alongside SHAP — see tabular_explain.py's
+    module docstring for why both are worth having (SHAP's TreeExplainer path
+    doesn't apply as cleanly to the SVM/MLP members of the voting ensemble).
+    """
+    model, scaler, names, _, _ = _load_assets()
+
+    full_row = pd.DataFrame([raw_feature_dict])
+    scaled_full = pd.DataFrame(scaler.transform(full_row[scaler.feature_names_in_]), columns=scaler.feature_names_in_)
+    X_row = scaled_full[names]
+
+    explainer = _get_lime_explainer()
+    explanation = lime_explain_instance(explainer, model, X_row.iloc[0].values, num_features=num_features)
+    return [{"feature": desc, "weight": round(float(weight), 4)} for desc, weight in explanation.as_list()]
 
 
 def default_feature_values() -> dict:
