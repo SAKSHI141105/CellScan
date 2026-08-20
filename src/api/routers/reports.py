@@ -113,5 +113,7 @@ def report_csv(payload: ReportRequest):
 
 @router.post("/report/pdf")
 def report_pdf(payload: ReportRequest):
-    pdf_bytes = report_service.build_pdf_report(payload.model_dump(), payload.source, payload.top_contributors)
+    pdf_bytes = report_service.build_pdf_report(
+        payload.model_dump(), payload.source, payload.top_contributors, payload.gradcam_png_base64
+    )
     return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=cellscan_report.pdf"})

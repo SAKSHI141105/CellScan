@@ -11,51 +11,55 @@
   --muted: 205 25% 95%;
   --muted-foreground: 205 15% 42%;
 
-  --primary: 183 82% 25%;
+  --primary: 190 100% 32%;
   --primary-foreground: 0 0% 100%;
-  --accent: 182 76% 37%;
+  --accent: 190 90% 38%;
   --accent-foreground: 0 0% 100%;
 
-  --sidebar: 213 47% 20%;
+  --sidebar: 225 40% 18%;
   --sidebar-foreground: 210 30% 94%;
-  --sidebar-active: 213 40% 28%;
+  --sidebar-active: 225 34% 27%;
 
-  --risk-low-bg: 150 55% 94%;
-  --risk-low-fg: 152 60% 28%;
+  --risk-low-bg: 160 55% 94%;
+  --risk-low-fg: 160 84% 28%;
   --risk-mid-bg: 42 90% 94%;
   --risk-mid-fg: 32 75% 36%;
-  --risk-high-bg: 4 70% 95%;
-  --risk-high-fg: 3 65% 44%;
+  --risk-high-bg: 0 75% 96%;
+  --risk-high-fg: 0 72% 46%;
 
-  --ring: 183 82% 25%;
+  --ring: 190 100% 32%;
 }
 
+/* Dark/Clinical mode — Dark Navy page, Deep Slate surfaces, Medical Teal
+   accent, Emerald/Crimson risk indicators. These are the exact hexes from
+   the design brief (#0B132B / #1C2541 / #00B4D8 / #10B981 / #EF4444),
+   converted to HSL so they compose with the rest of this token system. */
 .dark {
-  --background: 208 38% 8%;
-  --foreground: 210 30% 94%;
-  --card: 209 34% 11%;
-  --card-foreground: 210 30% 94%;
-  --border: 208 22% 20%;
-  --muted: 208 26% 14%;
-  --muted-foreground: 208 15% 65%;
+  --background: 225 59% 11%;
+  --foreground: 210 30% 95%;
+  --card: 225 40% 18%;
+  --card-foreground: 210 30% 95%;
+  --border: 225 28% 27%;
+  --muted: 225 35% 15%;
+  --muted-foreground: 215 20% 68%;
 
-  --primary: 182 70% 45%;
-  --primary-foreground: 208 38% 8%;
-  --accent: 182 65% 50%;
-  --accent-foreground: 208 38% 8%;
+  --primary: 190 100% 42%;
+  --primary-foreground: 225 59% 11%;
+  --accent: 190 95% 48%;
+  --accent-foreground: 225 59% 11%;
 
-  --sidebar: 210 40% 7%;
-  --sidebar-foreground: 210 25% 88%;
-  --sidebar-active: 209 34% 15%;
+  --sidebar: 225 40% 18%;
+  --sidebar-foreground: 210 25% 90%;
+  --sidebar-active: 225 34% 27%;
 
-  --risk-low-bg: 152 40% 14%;
-  --risk-low-fg: 150 55% 68%;
-  --risk-mid-bg: 38 55% 15%;
+  --risk-low-bg: 160 45% 15%;
+  --risk-low-fg: 160 75% 58%;
+  --risk-mid-bg: 38 55% 16%;
   --risk-mid-fg: 42 85% 68%;
-  --risk-high-bg: 4 45% 16%;
-  --risk-high-fg: 4 70% 70%;
+  --risk-high-bg: 0 48% 17%;
+  --risk-high-fg: 0 84% 70%;
 
-  --ring: 182 70% 45%;
+  --ring: 190 100% 42%;
 }
 
 @theme inline {

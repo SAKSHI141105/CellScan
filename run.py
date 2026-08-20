@@ -65,7 +65,7 @@ def main():
 
     print("[run.py] starting API on :8000 ...")
     api_proc = subprocess.Popen(
-        [_venv_python(), "-m", "uvicorn", "src.api.main:app", "--port", str(API_PORT)],
+        [_venv_python(), "-m", "uvicorn", "src.api.main:app", "--port", str(API_PORT), "--reload"],
         cwd=PROJECT_ROOT,
     )
 

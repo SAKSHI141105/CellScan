@@ -11,10 +11,26 @@ export class ApiError extends Error {
   }
 }
 
+// FastAPI's HTTPException usually carries a plain string in `detail`, but a
+// few endpoints (image inference) raise a structured {error, details} object
+// so the UI can show the actual failure reason instead of a generic "failed"
+// — this normalizes either shape into one readable string.
+function extractErrorMessage(body: unknown, fallback: string): string {
+  if (body && typeof body === "object" && "detail" in body) {
+    const detail = (body as { detail: unknown }).detail;
+    if (typeof detail === "string") return detail;
+    if (detail && typeof detail === "object" && "error" in detail) {
+      const { error, details } = detail as { error: string; details?: string };
+      return details ? `${error}: ${details}` : error;
+    }
+  }
+  return fallback;
+}
+
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new ApiError(res.status, body.detail ?? res.statusText);
+    const body = await res.json().catch(() => null);
+    throw new ApiError(res.status, extractErrorMessage(body, res.statusText));
   }
   return res.json();
 }
@@ -121,20 +137,28 @@ export const reportsApi = {
   rocCurves: () => fetch(`${BASE}/reports/roc-curves`).then((r) => handle<{ curves: RocCurve[] }>(r)),
   confusionMatrices: () => fetch(`${BASE}/reports/confusion-matrices`).then((r) => handle<{ matrices: ConfusionMatrix[] }>(r)),
 
-  downloadCsv: (payload: { predicted_class: string; probability_malignant: number; source: string; top_contributors?: TopContributor[] }) =>
+  downloadCsv: (payload: ReportPayload) =>
     fetch(`${BASE}/report/csv`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }).then((r) => r.blob()),
 
-  downloadPdf: (payload: { predicted_class: string; probability_malignant: number; source: string; top_contributors?: TopContributor[] }) =>
+  downloadPdf: (payload: ReportPayload) =>
     fetch(`${BASE}/report/pdf`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }).then((r) => r.blob()),
 };
+
+export interface ReportPayload {
+  predicted_class: string;
+  probability_malignant: number;
+  source: string;
+  top_contributors?: TopContributor[];
+  gradcam_png_base64?: string;
+}
 
 export interface ClusterPoint {
   x: number;

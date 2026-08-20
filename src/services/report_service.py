@@ -3,6 +3,7 @@ no wkhtmltopdf/Chromium dependency, which matters for a one-command deploy.
 """
 from __future__ import annotations
 
+import base64
 import io
 from datetime import datetime
 
@@ -31,7 +32,12 @@ class _ReportPDF(FPDF):
         self.ln(4)
 
 
-def build_pdf_report(result: dict, source: str, top_contributors: list[dict] | None = None) -> bytes:
+def build_pdf_report(
+    result: dict,
+    source: str,
+    top_contributors: list[dict] | None = None,
+    gradcam_png_base64: str | None = None,
+) -> bytes:
     pdf = _ReportPDF()
     pdf.add_page()
 
@@ -44,6 +50,14 @@ def build_pdf_report(result: dict, source: str, top_contributors: list[dict] | N
     pdf.set_text_color(20, 51, 87)
     pdf.cell(0, 12, f"{result['predicted_class']}  ({result['probability_malignant']*100:.1f}% malignancy probability)", ln=True)
     pdf.ln(4)
+
+    if gradcam_png_base64:
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.set_text_color(11, 31, 42)
+        pdf.cell(0, 8, "Grad-CAM heatmap overlay", ln=True)
+        image_bytes = base64.b64decode(gradcam_png_base64)
+        pdf.image(io.BytesIO(image_bytes), w=90)
+        pdf.ln(4)
 
     if top_contributors:
         pdf.set_font("Helvetica", "B", 11)

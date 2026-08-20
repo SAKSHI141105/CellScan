@@ -4,12 +4,58 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Spinner } from "@/components/ui/spinner";
-import { PredictionResultCard } from "@/components/prediction-result-card";
+import { StagedLoader } from "@/components/ui/staged-loader";
+import { RiskGauge } from "@/components/ui/risk-gauge";
 import { DisclaimerBanner } from "@/components/layout/disclaimer-banner";
 import { ApiError, imageApi, reportsApi, triggerDownload, type ImagePredictResult } from "@/lib/api";
 import { riskTier } from "@/lib/utils";
-import { AlertTriangle, Download, FileDown } from "lucide-react";
+import { AlertTriangle, Download, FileDown, FileImage } from "lucide-react";
+
+const STAGE_MESSAGES = [
+  "Preprocessing image — grayscale, resize, CLAHE...",
+  "Denoising and normalizing pixel intensities...",
+  "Running CNN inference...",
+  "Generating Grad-CAM heatmap overlay...",
+];
+
+/** A short, deterministic tag derived from the filename — not a real
+ * specimen/accession number, just something stable to reference the upload
+ * by in the metadata strip and the exported report. */
+function specimenTag(filename: string): string {
+  let hash = 0;
+  for (const ch of filename) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return `SPEC-${hash.toString(36).toUpperCase().padStart(6, "0").slice(0, 6)}`;
+}
+
+function narrativeFor(predictedClass: string, probability: number): string {
+  const pct = (probability * 100).toFixed(1);
+  if (predictedClass === "Malignant") {
+    return `The model's attention, visualized via Grad-CAM, concentrates on the highlighted tissue regions in the heatmap. At ${pct}% predicted probability of malignancy, this sample falls in the ${riskTier(probability).label.toLowerCase()} band and would warrant closer review in a real triage workflow.`;
+  }
+  return `Grad-CAM attention is diffuse rather than concentrated on any single irregular structure, consistent with the model's ${pct}% predicted probability of malignancy — the ${riskTier(probability).label.toLowerCase()} band.`;
+}
+
+function SpecimenHeader({ filename, timestamp, modelKey }: { filename: string; timestamp: string; modelKey: string }) {
+  const fields = [
+    { label: "Specimen ID", value: specimenTag(filename) },
+    { label: "Source file", value: filename },
+    { label: "Analyzed", value: timestamp },
+    { label: "Specimen type", value: "Histopathology tissue patch" },
+    { label: "Model", value: modelKey.replace(/_/g, " ") },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg border border-border bg-muted/50 px-4 py-3 sm:grid-cols-5">
+      {fields.map((f) => (
+        <div key={f.label} className="min-w-0">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{f.label}</div>
+          <div className="truncate text-xs font-semibold" title={f.value}>
+            {f.value}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function UploadImage() {
   const [modelAvailable, setModelAvailable] = useState<boolean | null>(null);
@@ -19,6 +65,7 @@ export function UploadImage() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState(0);
   const [downloading, setDownloading] = useState<"csv" | "pdf" | null>(null);
+  const [analyzedAt, setAnalyzedAt] = useState<string>("");
 
   useEffect(() => {
     imageApi.status().then((s) => setModelAvailable(s.available));
@@ -30,6 +77,7 @@ export function UploadImage() {
     setFiles(accepted);
     setResults(null);
     setSelected(0);
+    setError(null);
   }
 
   async function runPrediction() {
@@ -39,6 +87,7 @@ export function UploadImage() {
     try {
       const res = await imageApi.predictBatch(files);
       setResults(res.results);
+      setAnalyzedAt(new Date().toLocaleString());
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Prediction failed");
     } finally {
@@ -51,9 +100,9 @@ export function UploadImage() {
     const result = results[selected];
     setDownloading(kind);
     try {
-      const payload = { ...result, source: result.filename };
+      const payload = { ...result, source: result.filename, gradcam_png_base64: result.gradcam_png_base64 };
       const blob = kind === "csv" ? await reportsApi.downloadCsv(payload) : await reportsApi.downloadPdf(payload);
-      triggerDownload(blob, `cellscan_image_report.${kind}`);
+      triggerDownload(blob, `cellscan_${specimenTag(result.filename)}_report.${kind}`);
     } finally {
       setDownloading(null);
     }
@@ -75,8 +124,9 @@ export function UploadImage() {
         <div className="mt-4 flex items-start gap-2 rounded-lg border border-risk-mid-fg/25 bg-risk-mid-bg/50 px-4 py-3 text-sm text-risk-mid-fg">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            No trained image model found yet. Run <code className="font-mono-num">python scripts/train_image.py</code>{" "}
-            after downloading the histopathology dataset (see README) to enable predictions.
+            No trained image model found yet — this is expected until the histopathology dataset is downloaded and{" "}
+            <code className="font-mono-num">python scripts/train_image.py</code> has been run (see README). This is a
+            setup step, not an application error.
           </span>
         </div>
       )}
@@ -91,16 +141,34 @@ export function UploadImage() {
       </div>
 
       {files.length > 0 && (
-        <div className="mt-4 flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">{files.length} file(s) selected</span>
-          <Button onClick={runPrediction} loading={loading}>
-            Run prediction
-          </Button>
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap gap-3">
+            {files.map((f, i) => (
+              <figure key={f.name + i} className="w-24">
+                <img src={previewUrls[i]} className="aspect-square w-24 rounded-lg border border-border object-cover" />
+                <figcaption className="mt-1 truncate text-[10px] text-muted-foreground" title={f.name}>
+                  {f.name}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">{files.length} file(s) ready</span>
+            <Button onClick={runPrediction} loading={loading}>
+              Run prediction
+            </Button>
+          </div>
         </div>
       )}
 
       {error && <p className="mt-3 text-sm text-risk-high-fg">{error}</p>}
-      {loading && <Spinner className="mt-3" label="Running CNN inference..." />}
+      {loading && (
+        <Card className="mt-4">
+          <CardContent className="pt-5">
+            <StagedLoader stages={STAGE_MESSAGES} />
+          </CardContent>
+        </Card>
+      )}
 
       {results && (
         <div className="mt-6 space-y-4">
@@ -146,49 +214,70 @@ export function UploadImage() {
 
           {current && (
             <div className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <figure>
-                  <img src={currentPreviewUrl} className="w-full rounded-lg border border-border" />
-                  <figcaption className="mt-1.5 text-xs text-muted-foreground">Original upload</figcaption>
-                </figure>
-                <figure>
-                  <img
-                    src={`data:image/png;base64,${current.preprocessed_png_base64}`}
-                    className="w-full rounded-lg border border-border"
-                  />
-                  <figcaption className="mt-1.5 text-xs text-muted-foreground">
-                    Preprocessed (grayscale + CLAHE + denoise)
-                  </figcaption>
-                </figure>
-              </div>
+              <SpecimenHeader filename={current.filename} timestamp={analyzedAt} modelKey={current.model_key} />
 
               <div className="grid gap-4 lg:grid-cols-2">
+                {/* left column — original alongside the Grad-CAM overlay */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Original vs. Grad-CAM overlay</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <figure>
+                        <img src={currentPreviewUrl} className="aspect-square w-full rounded-lg border border-border object-cover" />
+                        <figcaption className="mt-1.5 text-xs text-muted-foreground">Original upload</figcaption>
+                      </figure>
+                      <figure>
+                        <img
+                          src={`data:image/png;base64,${current.gradcam_png_base64}`}
+                          className="aspect-square w-full rounded-lg border border-border object-cover"
+                        />
+                        <figcaption className="mt-1.5 text-xs text-muted-foreground">Grad-CAM heatmap</figcaption>
+                      </figure>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Warmer regions in the heatmap contributed more strongly to the predicted class.
+                    </p>
+                    <div className="flex items-center gap-2 border-t border-border pt-3">
+                      <FileImage className="h-3.5 w-3.5 text-muted-foreground" />
+                      <img
+                        src={`data:image/png;base64,${current.preprocessed_png_base64}`}
+                        className="h-12 w-12 rounded border border-border object-cover"
+                      />
+                      <span className="text-xs text-muted-foreground">Preprocessed input (grayscale + CLAHE + denoise)</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* right column — risk gauge, narrative, report actions */}
                 <div className="space-y-4">
-                  <PredictionResultCard predictedClass={current.predicted_class} probability={current.probability_malignant} />
-                  <p className="text-xs text-muted-foreground">Model: {current.model_key}</p>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Risk assessment</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col items-center gap-2 pt-2">
+                      <RiskGauge probability={current.probability_malignant} />
+                      <p className="text-sm font-semibold">{current.predicted_class}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Clinical summary</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-sm leading-relaxed">
+                      {narrativeFor(current.predicted_class, current.probability_malignant)}
+                    </CardContent>
+                  </Card>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" loading={downloading === "csv"} onClick={() => download("csv")}>
                       <Download className="h-3.5 w-3.5" /> CSV report
                     </Button>
                     <Button variant="outline" size="sm" loading={downloading === "pdf"} onClick={() => download("pdf")}>
-                      <FileDown className="h-3.5 w-3.5" /> PDF report
+                      <FileDown className="h-3.5 w-3.5" /> Download clinical report (PDF)
                     </Button>
                   </div>
                 </div>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Grad-CAM — regions driving the prediction</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <img
-                      src={`data:image/png;base64,${current.gradcam_png_base64}`}
-                      className="w-full rounded-lg border border-border"
-                    />
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Warmer regions contributed more strongly to the predicted class.
-                    </p>
-                  </CardContent>
-                </Card>
               </div>
             </div>
           )}
