@@ -192,7 +192,46 @@ tests/                       unit tests for the preprocessing functions
 reports/figures/             generated EDA plots + metrics CSVs (gitignored contents,
                               folder tracked)
 data/                        raw/processed data + trained model artifacts (gitignored)
+research/
+  mammography_generalization/  separate PyTorch research pipeline — see below
 ```
+
+## Research module: mammography cross-dataset generalization
+
+`research/mammography_generalization/` is a second, self-contained pipeline
+in this same repo — a PyTorch project testing whether an auxiliary
+lesion-segmentation loss makes a mammography classifier's backbone
+generalize better across scanners/institutions (CBIS-DDSM → zero-shot on
+VinDr-Mammo/INbreast), versus a classification-only baseline trained the
+same way otherwise.
+
+It's kept structurally separate from the main app on purpose:
+
+- **Different modality and question.** The main app classifies WDBC tabular
+  records and histopathology *microscopy* patches. This module works on
+  mammography *X-rays* and asks a cross-dataset generalization question,
+  not a single-dataset classification one — there's no shared model,
+  dataset, or code path between them, so merging the code wouldn't make
+  either half simpler.
+- **Different, much heavier dependency stack.** PyTorch + `timm` +
+  `pydicom` + CPU/CUDA wheel selection vs. the main app's
+  scikit-learn/TensorFlow/FastAPI stack. Sharing one `requirements.txt` and
+  one venv between them would mean everyone installs both stacks (and picks
+  a CUDA/CPU torch build) just to run either one.
+- **No web UI.** It's a training/evaluation research pipeline run from the
+  terminal (`python train.py --config ...`), not something with a page in
+  the dashboard — there's nothing to route to from the React frontend yet,
+  since there's no trained mammography checkpoint or served inference
+  endpoint for it to call.
+
+It lives in this repo (not a separate one) because it's the same overall
+"breast cancer ML" effort and the same person maintaining it — separate
+enough to isolate, not separate enough to need its own repo and its own
+GitHub history to track down later. See
+[research/mammography_generalization/README.md](research/mammography_generalization/README.md)
+for its own setup, architecture, and data-access instructions — none of
+CBIS-DDSM/INbreast/VinDr-Mammo are simple downloads, and that's documented
+there rather than repeated here.
 
 ## Design decisions / trade-offs
 
