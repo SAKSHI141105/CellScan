@@ -41,12 +41,22 @@ def run_dbscan(X: np.ndarray, eps: float = 1.5, min_samples: int = 5):
     return model, labels
 
 
-def project_2d(X: np.ndarray, method: str = "pca", random_state: int = 42, perplexity: int = 30) -> np.ndarray:
+def project(X: np.ndarray, method: str = "pca", n_components: int = 2, random_state: int = 42, perplexity: int = 30) -> np.ndarray:
     if method == "pca":
-        return PCA(n_components=2, random_state=random_state).fit_transform(X)
+        return PCA(n_components=n_components, random_state=random_state).fit_transform(X)
     if method == "tsne":
-        return TSNE(n_components=2, perplexity=perplexity, random_state=random_state, init="pca").fit_transform(X)
+        # perplexity must stay under the sample count or sklearn raises
+        perplexity = min(perplexity, max(5, len(X) // 4))
+        return TSNE(n_components=n_components, perplexity=perplexity, random_state=random_state, init="pca").fit_transform(X)
+    if method == "umap":
+        import umap
+
+        return umap.UMAP(n_components=n_components, random_state=random_state).fit_transform(X)
     raise ValueError(f"unknown projection method: {method}")
+
+
+def project_2d(X: np.ndarray, method: str = "pca", random_state: int = 42, perplexity: int = 30) -> np.ndarray:
+    return project(X, method=method, n_components=2, random_state=random_state, perplexity=perplexity)
 
 
 def run_all_clustering(X_scaled: np.ndarray, y_true: np.ndarray, cfg: dict) -> dict:

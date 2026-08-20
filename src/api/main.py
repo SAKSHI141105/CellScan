@@ -4,6 +4,9 @@
 """
 from __future__ import annotations
 
+import threading
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -12,7 +15,15 @@ from src.utils.logging_setup import get_logger
 
 logger = get_logger(__name__)
 
-app = FastAPI(title="CellScan API", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # daemon thread so a slow/failed warmup never blocks shutdown
+    threading.Thread(target=clusters.warm_projection_cache, daemon=True).start()
+    yield
+
+
+app = FastAPI(title="CellScan API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

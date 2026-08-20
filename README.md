@@ -110,7 +110,22 @@ pytest
 ```
 
 The app is two processes: a FastAPI backend serving the ML pipelines, and a
-Vite/React frontend. Run both, in two terminals:
+Vite/React frontend. Easiest path — one command starts both, waits until
+they're actually answering, and opens the browser for you:
+
+```bash
+python run.py
+```
+
+(`--no-browser` if you don't want the tab auto-opened.) This exists because
+"run these two things in two terminals" is exactly the instruction people
+skip half of, then report the app as broken when it's really just the API
+process that never started — `run.py` makes that failure mode structurally
+impossible: it health-checks both services before declaring success, and if
+either one dies it shuts the other down rather than leaving you with a
+frontend silently unable to reach its API.
+
+Prefer to run them yourself (e.g. for `--reload` during backend development):
 
 ```bash
 # terminal 1 — API on :8000
@@ -121,7 +136,8 @@ cd frontend
 npm run dev
 ```
 
-Then open `http://localhost:5173`. The Clinical Data page works immediately
+Either way, open `http://localhost:5173` — not :8000, that's the bare API.
+The Clinical Data page works immediately
 even before you've run `train_tabular.py` — the API falls back to a quick
 untuned RandomForest trained in-memory so the app is never a dead end on a
 fresh clone. Run the real training script for the tuned ensemble + SHAP
@@ -148,6 +164,8 @@ BreakHis and the Kaggle IDC set don't agree with each other.
 ## Folder structure
 
 ```
+run.py                       single-command launcher — starts the API + frontend
+                              together and health-checks both (see Running things)
 config/config.yaml          all hyperparameters, paths, model grids — nothing
                              hardcoded in the pipeline code
 src/
@@ -262,6 +280,26 @@ two major versions. Fix was just re-running `train_tabular.py` against the
 now-stable, `requirements.txt`-pinned environment; worth calling out because
 it's a real failure mode of installing ML dependencies incrementally rather
 than all at once from a lockfile.
+
+**UMAP gets warmed at API startup, not computed lazily.** Measured locally:
+the first `UMAP().fit_transform()` call in a fresh process takes ~90 seconds
+— almost entirely numba JIT-compiling UMAP's internals, not the actual
+projection math — while every call after that is near-instant for the rest
+of the process's life. Making someone's first click on the Cluster Explorer's
+UMAP tab eat that cost would look exactly like a hung server. `src/api/main.py`
+fires a background thread on startup (`clusters.warm_projection_cache()`)
+that computes and caches the 2D and 3D UMAP projections before anyone's
+likely to have asked for them; the frontend also has a "this may take a
+minute" notice as a fallback for the case where someone's fast enough to hit
+it mid-warmup anyway.
+
+**Plotly for 3D, recharts for 2D — not one library for both.** The Cluster
+Explorer's 2D scatter plots stayed on recharts (already in use for the ROC
+curves), but 3D needs actual WebGL, which is what pulled in Plotly. Rather
+than replace recharts everywhere for consistency, `Scatter3D` is the one
+component built on it, and it's lazy-loaded (`React.lazy` + `Suspense`) —
+plotly.js alone is several MB, and there's no reason to make every visitor
+download it just to view the 2D charts on every other page.
 
 ## Testing
 

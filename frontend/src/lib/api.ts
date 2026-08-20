@@ -139,13 +139,16 @@ export const reportsApi = {
 export interface ClusterPoint {
   x: number;
   y: number;
+  z?: number;
   trueDiagnosis: "Benign" | "Malignant";
   kmeansCluster: string;
 }
 
 export const clustersApi = {
-  projection: (method: "pca" | "tsne") =>
-    fetch(`${BASE}/clusters/projection?method=${method}`).then((r) => handle<{ points: ClusterPoint[] }>(r)),
+  projection: (method: "pca" | "tsne" | "umap", dimensions: 2 | 3 = 2) =>
+    fetch(`${BASE}/clusters/projection?method=${method}&dimensions=${dimensions}`).then((r) =>
+      handle<{ points: ClusterPoint[] }>(r)
+    ),
 };
 
 export function triggerDownload(blob: Blob, filename: string) {
