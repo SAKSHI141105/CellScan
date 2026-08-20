@@ -13,3 +13,4 @@ class ReportRequest(BaseModel):
     source: str
     top_contributors: list[dict] | None = None
     gradcam_png_base64: str | None = None
+    is_demo: bool = False

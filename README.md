@@ -105,6 +105,12 @@ python -m scripts.train_tabular
 # image pipeline (needs the dataset — see below)
 python -m scripts.train_image
 
+# don't want to wait on the dataset download to try the Upload Image page?
+# generates an ImageNet-only checkpoint (no histopathology training at all) so
+# the upload -> Grad-CAM -> report flow works end to end. Clearly labeled
+# "DEMO" everywhere in the UI/exports — see Design decisions below for why.
+python -m scripts.generate_demo_weights
+
 # unit tests
 pytest
 ```
@@ -339,6 +345,34 @@ than replace recharts everywhere for consistency, `Scatter3D` is the one
 component built on it, and it's lazy-loaded (`React.lazy` + `Suspense`) —
 plotly.js alone is several MB, and there's no reason to make every visitor
 download it just to view the 2D charts on every other page.
+
+**The image-model demo fallback is loud on purpose.** `load_image_model()`
+in `src/services/image_service.py` resolves, in order: a real trained
+checkpoint, saved demo weights (`scripts/generate_demo_weights.py`), or —
+if neither exists — builds an ImageNet-only model in memory on the spot. Every
+tier past the first one sets `is_demo: true` on the API response, and the
+frontend threads that flag through every surface that touches it: the
+pre-upload status banner, the results table (a `DEMO` badge per row), the
+specimen header, the risk gauge card, the clinical-summary text, and the
+exported CSV/PDF (a bold warning line, not a footnote). This is more
+plumbing than a quiet `if not model: use_random()` fallback would need, but
+a fabricated prediction that *looks* like a real one is a genuinely bad
+failure mode for anything in a medical-app shell — cheap to over-communicate
+here, expensive to under-communicate.
+
+While wiring this up, generating a demo checkpoint and reloading it in a
+fresh process (which is the real deployment path — `train_image.py` saves,
+`image_service.py` loads later, possibly after a restart) surfaced a bug
+that would have hit the *real* trained-model path too: `build_transfer_model`
+used an unregistered custom Keras layer and a `Lambda` closure, both of
+which fail to deserialize outside the process that created them
+("Unknown layer: 'ReplicateChannels'"). Fixed by registering the custom
+layer with `@register_keras_serializable` and replacing the Lambda closure
+with a proper layer that looks up its preprocessing function by name
+instead of capturing it — see `src/models/image_cnn.py`. Worth calling out
+because it's the kind of bug that's invisible until someone actually reloads
+a saved model in a new process, which nothing in this project had done
+before generating demo weights forced the issue.
 
 ## Testing
 

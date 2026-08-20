@@ -18,6 +18,8 @@ def build_csv_report(result: dict, source: str) -> bytes:
         "predicted_class": result["predicted_class"],
         "probability_malignant": round(result["probability_malignant"], 4),
     }
+    if result.get("is_demo"):
+        row["WARNING"] = "DEMO MODEL - untrained (ImageNet weights only), not a real prediction"
     return pd.DataFrame([row]).to_csv(index=False).encode("utf-8")
 
 
@@ -45,6 +47,17 @@ def build_pdf_report(
     pdf.set_text_color(11, 31, 42)
     pdf.cell(0, 8, f"Input source: {source}", ln=True)
     pdf.ln(2)
+
+    if result.get("is_demo"):
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.set_text_color(180, 40, 40)
+        pdf.multi_cell(
+            0, 6,
+            "DEMO MODEL - this checkpoint has ImageNet-pretrained weights only and has never "
+            "been trained on histopathology data. This prediction is not meaningful and exists "
+            "purely to demonstrate the UI/report pipeline.",
+        )
+        pdf.ln(2)
 
     pdf.set_font("Helvetica", "B", 20)
     pdf.set_text_color(20, 51, 87)

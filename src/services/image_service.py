@@ -20,29 +20,61 @@ _cache: dict = {}
 
 
 def load_image_model(prefer: str = "transfer"):
-    """Returns (model, model_key) or (None, None) if nothing's been trained yet."""
+    """Returns (model, model_key, is_demo) or (None, None, None) only if
+    even the in-memory fallback build fails (missing tensorflow, etc).
+
+    Resolution order: real trained checkpoint -> demo weights saved on disk
+    by scripts/generate_demo_weights.py -> build the demo model fresh in
+    memory. The last step means the image pipeline is never a hard dead end
+    even before that script has been run once — same convenience trade-off
+    tabular_service.py makes with its untrained-RandomForest fallback, and
+    same caveat: every one of these fallback tiers gets flagged is_demo=True
+    so nothing downstream can mistake it for a real result.
+    """
     if "model" in _cache:
         return _cache["model"]
 
-    import tensorflow as tf
-
     backbone = CFG["image"]["transfer_backbone"]
-    candidates = [
+    real_candidates = [
         (IMAGE_MODELS_DIR / f"transfer_{backbone}_final.h5", f"transfer_{backbone}"),
         (IMAGE_MODELS_DIR / "custom_cnn_final.h5", "custom_cnn"),
     ]
     if prefer == "custom":
-        candidates.reverse()
+        real_candidates.reverse()
 
-    for path, key in candidates:
+    import tensorflow as tf
+
+    # importing this registers the custom ReplicateChannels/PreprocessForBackbone
+    # layers with Keras's serialization registry — required before load_model()
+    # can deserialize a transfer-learning checkpoint, even though nothing here
+    # calls into image_cnn directly on this path
+    from src.models import image_cnn  # noqa: F401
+
+    for path, key in real_candidates:
         if path.exists():
-            result = (tf.keras.models.load_model(path), key)
+            result = (tf.keras.models.load_model(path), key, False)
             _cache["model"] = result
-            logger.info("Loaded image model: %s", key)
+            logger.info("Loaded trained image model: %s", key)
             return result
 
-    _cache["model"] = (None, None)
-    return None, None
+    demo_path = IMAGE_MODELS_DIR / f"demo_untrained_transfer_{backbone}.h5"
+    if demo_path.exists():
+        result = (tf.keras.models.load_model(demo_path), f"transfer_{backbone}", True)
+        _cache["model"] = result
+        logger.warning("No trained checkpoint found — loaded DEMO weights (%s, untrained). Predictions are not meaningful.", demo_path.name)
+        return result
+
+    logger.warning(
+        "No trained checkpoint or demo weights found — building an ImageNet-only DEMO model "
+        "in memory (run scripts/generate_demo_weights.py to persist this instead of rebuilding every restart)."
+    )
+    from src.models import image_cnn
+
+    img_cfg = CFG["image"]
+    model = image_cnn.build_transfer_model(backbone, img_cfg["img_size"], img_cfg["fine_tune_last_n_layers"])
+    result = (model, f"transfer_{backbone}", True)
+    _cache["model"] = result
+    return result
 
 
 def gray_float_to_png_base64(img_float: np.ndarray) -> str:
@@ -61,7 +93,7 @@ def bgr_to_png_base64(img_bgr: np.ndarray) -> str:
 def predict(preprocessed_img: np.ndarray) -> dict | None:
     from src.explainability.gradcam import explain_prediction
 
-    model, model_key = load_image_model()
+    model, model_key, is_demo = load_image_model()
     if model is None:
         return None
 
@@ -76,4 +108,5 @@ def predict(preprocessed_img: np.ndarray) -> dict | None:
         "preprocessed_png_base64": gray_float_to_png_base64(preprocessed_img),
         "gradcam_png_base64": bgr_to_png_base64(overlay),
         "model_key": model_key,
+        "is_demo": is_demo,
     }

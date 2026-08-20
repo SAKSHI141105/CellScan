@@ -27,7 +27,10 @@ function specimenTag(filename: string): string {
   return `SPEC-${hash.toString(36).toUpperCase().padStart(6, "0").slice(0, 6)}`;
 }
 
-function narrativeFor(predictedClass: string, probability: number): string {
+function narrativeFor(predictedClass: string, probability: number, isDemo: boolean): string {
+  if (isDemo) {
+    return "This model has never been trained on histopathology data — it only carries ImageNet-pretrained weights. The prediction, heatmap, and probability above are not clinically meaningful; they exist to demonstrate the UI while a real model finishes training.";
+  }
   const pct = (probability * 100).toFixed(1);
   if (predictedClass === "Malignant") {
     return `The model's attention, visualized via Grad-CAM, concentrates on the highlighted tissue regions in the heatmap. At ${pct}% predicted probability of malignancy, this sample falls in the ${riskTier(probability).label.toLowerCase()} band and would warrant closer review in a real triage workflow.`;
@@ -35,20 +38,30 @@ function narrativeFor(predictedClass: string, probability: number): string {
   return `Grad-CAM attention is diffuse rather than concentrated on any single irregular structure, consistent with the model's ${pct}% predicted probability of malignancy — the ${riskTier(probability).label.toLowerCase()} band.`;
 }
 
-function SpecimenHeader({ filename, timestamp, modelKey }: { filename: string; timestamp: string; modelKey: string }) {
+function SpecimenHeader({
+  filename,
+  timestamp,
+  modelKey,
+  isDemo,
+}: {
+  filename: string;
+  timestamp: string;
+  modelKey: string;
+  isDemo: boolean;
+}) {
   const fields = [
     { label: "Specimen ID", value: specimenTag(filename) },
     { label: "Source file", value: filename },
     { label: "Analyzed", value: timestamp },
     { label: "Specimen type", value: "Histopathology tissue patch" },
-    { label: "Model", value: modelKey.replace(/_/g, " ") },
+    { label: "Model", value: isDemo ? `${modelKey.replace(/_/g, " ")} (DEMO)` : modelKey.replace(/_/g, " ") },
   ];
   return (
     <div className="grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg border border-border bg-muted/50 px-4 py-3 sm:grid-cols-5">
       {fields.map((f) => (
         <div key={f.label} className="min-w-0">
           <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{f.label}</div>
-          <div className="truncate text-xs font-semibold" title={f.value}>
+          <div className={`truncate text-xs font-semibold ${f.label === "Model" && isDemo ? "text-risk-high-fg" : ""}`} title={f.value}>
             {f.value}
           </div>
         </div>
@@ -57,8 +70,24 @@ function SpecimenHeader({ filename, timestamp, modelKey }: { filename: string; t
   );
 }
 
+function DemoModeBanner() {
+  return (
+    <div className="mt-4 flex items-start gap-2 rounded-lg border-2 border-risk-high-fg/40 bg-risk-high-bg/60 px-4 py-3 text-sm text-risk-high-fg">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      <span>
+        <strong>Demo mode.</strong> The active model has ImageNet-pretrained weights only — it has never seen a
+        histopathology image and its predictions are not meaningful. This exists so you can exercise the upload →
+        preprocess → Grad-CAM → report flow before a real model is trained. Run{" "}
+        <code className="font-mono-num">python scripts/train_image.py</code> with a real dataset for genuine
+        predictions.
+      </span>
+    </div>
+  );
+}
+
 export function UploadImage() {
   const [modelAvailable, setModelAvailable] = useState<boolean | null>(null);
+  const [modelIsDemo, setModelIsDemo] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [results, setResults] = useState<ImagePredictResult[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -68,7 +97,10 @@ export function UploadImage() {
   const [analyzedAt, setAnalyzedAt] = useState<string>("");
 
   useEffect(() => {
-    imageApi.status().then((s) => setModelAvailable(s.available));
+    imageApi.status().then((s) => {
+      setModelAvailable(s.available);
+      setModelIsDemo(s.is_demo);
+    });
   }, []);
 
   const previewUrls = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
@@ -100,7 +132,7 @@ export function UploadImage() {
     const result = results[selected];
     setDownloading(kind);
     try {
-      const payload = { ...result, source: result.filename, gradcam_png_base64: result.gradcam_png_base64 };
+      const payload = { ...result, source: result.filename, gradcam_png_base64: result.gradcam_png_base64, is_demo: result.is_demo };
       const blob = kind === "csv" ? await reportsApi.downloadCsv(payload) : await reportsApi.downloadPdf(payload);
       triggerDownload(blob, `cellscan_${specimenTag(result.filename)}_report.${kind}`);
     } finally {
@@ -124,12 +156,14 @@ export function UploadImage() {
         <div className="mt-4 flex items-start gap-2 rounded-lg border border-risk-mid-fg/25 bg-risk-mid-bg/50 px-4 py-3 text-sm text-risk-mid-fg">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            No trained image model found yet — this is expected until the histopathology dataset is downloaded and{" "}
-            <code className="font-mono-num">python scripts/train_image.py</code> has been run (see README). This is a
-            setup step, not an application error.
+            No trained image model or demo weights found. Run{" "}
+            <code className="font-mono-num">python scripts/generate_demo_weights.py</code> to test this page
+            immediately with an untrained model, or <code className="font-mono-num">python scripts/train_image.py</code>{" "}
+            after downloading the histopathology dataset for real predictions (see README).
           </span>
         </div>
       )}
+      {modelAvailable === true && modelIsDemo && <DemoModeBanner />}
 
       <div className="mt-6">
         <Dropzone
@@ -179,6 +213,9 @@ export function UploadImage() {
             <CardContent className="text-sm">
               {results.length} image(s) scored —{" "}
               <strong>{results.filter((r) => r.predicted_class === "Malignant").length}</strong> flagged malignant.
+              {results.some((r) => r.is_demo) && (
+                <span className="ml-2 font-semibold text-risk-high-fg">(demo model — not real predictions)</span>
+              )}
             </CardContent>
           </Card>
 
@@ -203,8 +240,9 @@ export function UploadImage() {
                     <TD className="font-sans">{r.filename}</TD>
                     <TD>{r.predicted_class}</TD>
                     <TD>{(r.probability_malignant * 100).toFixed(1)}%</TD>
-                    <TD>
+                    <TD className="flex flex-wrap gap-1.5">
                       <Badge tier={tier}>{label}</Badge>
+                      {r.is_demo && <Badge tier="high">DEMO</Badge>}
                     </TD>
                   </TR>
                 );
@@ -214,7 +252,7 @@ export function UploadImage() {
 
           {current && (
             <div className="space-y-4">
-              <SpecimenHeader filename={current.filename} timestamp={analyzedAt} modelKey={current.model_key} />
+              <SpecimenHeader filename={current.filename} timestamp={analyzedAt} modelKey={current.model_key} isDemo={current.is_demo} />
 
               <div className="grid gap-4 lg:grid-cols-2">
                 {/* left column — original alongside the Grad-CAM overlay */}
@@ -259,6 +297,7 @@ export function UploadImage() {
                     <CardContent className="flex flex-col items-center gap-2 pt-2">
                       <RiskGauge probability={current.probability_malignant} />
                       <p className="text-sm font-semibold">{current.predicted_class}</p>
+                      {current.is_demo && <Badge tier="high">DEMO — not a real prediction</Badge>}
                     </CardContent>
                   </Card>
                   <Card>
@@ -266,7 +305,7 @@ export function UploadImage() {
                       <CardTitle>Clinical summary</CardTitle>
                     </CardHeader>
                     <CardContent className="text-sm leading-relaxed">
-                      {narrativeFor(current.predicted_class, current.probability_malignant)}
+                      {narrativeFor(current.predicted_class, current.probability_malignant, current.is_demo)}
                     </CardContent>
                   </Card>
                   <div className="flex gap-2">

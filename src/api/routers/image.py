@@ -14,8 +14,8 @@ router = APIRouter(prefix="/api/image", tags=["image"])
 
 @router.get("/status")
 def status():
-    model, model_key = image_service.load_image_model()
-    return {"available": model is not None, "model_key": model_key}
+    model, model_key, is_demo = image_service.load_image_model()
+    return {"available": model is not None, "model_key": model_key, "is_demo": is_demo}
 
 
 async def _read_and_preprocess(file: UploadFile) -> np.ndarray:

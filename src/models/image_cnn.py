@@ -53,22 +53,55 @@ def build_custom_cnn(img_size: int = 224, channels: int = 1) -> models.Model:
     return model
 
 
+@tf.keras.utils.register_keras_serializable(package="cellscan")
 class ReplicateChannels(layers.Layer):
     """Grayscale -> 3ch inside the graph, so preprocessing stays 1-channel
     everywhere else and only the model itself knows it needs 3.
+
+    Registered for serialization on purpose — a plain unregistered
+    subclass round-trips fine within one process but fails to reload with
+    "Unknown layer: 'ReplicateChannels'" the moment you save the model and
+    load it back in a fresh process (which is every real deployment path:
+    train_image.py saves it, image_service.py loads it later). Found this
+    the hard way generating throwaway demo weights for the dashboard —
+    it would have bitten the first real trained model too.
     """
     def call(self, x):
         return tf.repeat(x, repeats=3, axis=-1)
 
 
+@tf.keras.utils.register_keras_serializable(package="cellscan")
+class PreprocessForBackbone(layers.Layer):
+    """Applies the ImageNet preprocessing a given backbone expects
+    (channel-wise mean subtraction, RGB<->BGR reordering, etc — different
+    per architecture). A plain `layers.Lambda(lambda t: preprocess_fn(...))`
+    has the same serialization problem as the unregistered ReplicateChannels
+    above (closures over an external function aren't reconstructable from
+    config), so this looks the function up by name at call time instead of
+    capturing it.
+    """
+    def __init__(self, backbone_name: str, **kwargs):
+        super().__init__(**kwargs)
+        self.backbone_name = backbone_name
+
+    def call(self, x):
+        _, preprocess_fn = _BACKBONES[self.backbone_name]
+        return preprocess_fn(x * 255.0)
+
+    def get_config(self):
+        config = super().get_config()
+        config["backbone_name"] = self.backbone_name
+        return config
+
+
 def build_transfer_model(backbone_name: str, img_size: int = 224, fine_tune_last_n: int = 20) -> models.Model:
     if backbone_name not in _BACKBONES:
         raise ValueError(f"unknown backbone {backbone_name}, choose from {list(_BACKBONES)}")
-    backbone_cls, preprocess_fn = _BACKBONES[backbone_name]
+    backbone_cls, _ = _BACKBONES[backbone_name]
 
     inputs = layers.Input(shape=(img_size, img_size, 1))
     x = ReplicateChannels()(inputs)
-    x = layers.Lambda(lambda t: preprocess_fn(t * 255.0))(x)
+    x = PreprocessForBackbone(backbone_name)(x)
 
     base = backbone_cls(weights="imagenet", include_top=False, input_tensor=x)
     base.trainable = False

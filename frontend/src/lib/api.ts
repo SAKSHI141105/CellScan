@@ -86,11 +86,13 @@ export interface ImagePredictResult {
   preprocessed_png_base64: string;
   gradcam_png_base64: string;
   model_key: string;
+  is_demo: boolean;
   filename: string;
 }
 
 export const imageApi = {
-  status: () => fetch(`${BASE}/image/status`).then((r) => handle<{ available: boolean; model_key: string | null }>(r)),
+  status: () =>
+    fetch(`${BASE}/image/status`).then((r) => handle<{ available: boolean; model_key: string | null; is_demo: boolean }>(r)),
 
   predict: (file: File) => {
     const form = new FormData();
@@ -158,6 +160,7 @@ export interface ReportPayload {
   source: string;
   top_contributors?: TopContributor[];
   gradcam_png_base64?: string;
+  is_demo?: boolean;
 }
 
 export interface ClusterPoint {
