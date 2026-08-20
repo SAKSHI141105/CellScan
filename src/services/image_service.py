@@ -92,6 +92,7 @@ def bgr_to_png_base64(img_bgr: np.ndarray) -> str:
 
 def predict(preprocessed_img: np.ndarray) -> dict | None:
     from src.explainability.gradcam import explain_prediction
+    from src.feature_engineering.texture_features import extract_classical_features
 
     model, model_key, is_demo = load_image_model()
     if model is None:
@@ -102,11 +103,16 @@ def predict(preprocessed_img: np.ndarray) -> dict | None:
     predicted_class = "Malignant" if proba >= 0.5 else "Benign"
     overlay = explain_prediction(model, model_key, preprocessed_img)
 
+    # real per-image GLCM/edge features, not a canned example — computed
+    # straight off the actual preprocessed pixels the model just scored
+    texture_features = extract_classical_features(preprocessed_img)
+
     return {
         "predicted_class": predicted_class,
         "probability_malignant": proba,
         "preprocessed_png_base64": gray_float_to_png_base64(preprocessed_img),
         "gradcam_png_base64": bgr_to_png_base64(overlay),
         "model_key": model_key,
+        "texture_features": texture_features,
         "is_demo": is_demo,
     }

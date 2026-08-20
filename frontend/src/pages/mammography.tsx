@@ -6,6 +6,7 @@ import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { StagedLoader } from "@/components/ui/staged-loader";
 import { RiskGauge } from "@/components/ui/risk-gauge";
+import { TextureFeatureChart } from "@/components/texture-feature-chart";
 import { DisclaimerBanner } from "@/components/layout/disclaimer-banner";
 import { ApiError, mammographyApi, reportsApi, triggerDownload, type MammographyPredictResult } from "@/lib/api";
 import { riskTier } from "@/lib/utils";
@@ -299,6 +300,14 @@ export function Mammography() {
                         </span>
                       </div>
                       <p className="pt-2 leading-relaxed text-muted-foreground">{current.explanation.summary}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>GLCM texture features (this scan)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <TextureFeatureChart features={current.texture_features} />
                     </CardContent>
                   </Card>
                   <div className="flex gap-2">

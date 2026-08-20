@@ -127,14 +127,24 @@ def predict(preprocessed_img: np.ndarray) -> dict:
     heatmap = cam(tensor_for_cam)
     overlay = overlay_heatmap(preprocessed_img, heatmap)
 
+    from src.feature_engineering.texture_features import extract_classical_features
+
+    texture_features = extract_classical_features(preprocessed_img)
+    concentration = _attention_concentration(heatmap)
+
     explanation = {
         "predicted_probability": round(proba, 4),
         "estimated_lesion_area_fraction": round(_mask_coverage(mask_probs), 4),
-        "attention_concentration": round(_attention_concentration(heatmap), 4),
+        "attention_concentration": round(concentration, 4),
         "summary": (
-            "Grad-CAM attention is concentrated on a localized region, consistent with a discrete "
-            "mass/calcification pattern." if _attention_concentration(heatmap) > 0.4 else
-            "Grad-CAM attention is diffuse across the tissue rather than localized on a single structure."
+            f"Grad-CAM attention is concentrated on a localized region (attention concentration "
+            f"{concentration:.2f}), consistent with a discrete mass/calcification pattern, alongside a "
+            f"GLCM contrast of {texture_features['glcm_contrast']:.1f} and homogeneity of "
+            f"{texture_features['glcm_homogeneity']:.2f} in the analyzed region."
+            if concentration > 0.4 else
+            f"Grad-CAM attention is diffuse across the tissue (concentration {concentration:.2f}) rather than "
+            f"localized on a single structure, with a GLCM contrast of {texture_features['glcm_contrast']:.1f} "
+            "over the full patch."
         ),
     }
 
@@ -145,5 +155,6 @@ def predict(preprocessed_img: np.ndarray) -> dict:
         "gradcam_png_base64": bgr_to_png_base64(overlay),
         "model_key": f"mammography_lesion_guided_{MAMMO_CFG['backbone']}",
         "explanation": explanation,
+        "texture_features": texture_features,
         "is_demo": is_demo,
     }

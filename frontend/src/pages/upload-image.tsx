@@ -6,6 +6,7 @@ import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { StagedLoader } from "@/components/ui/staged-loader";
 import { RiskGauge } from "@/components/ui/risk-gauge";
+import { TextureFeatureChart } from "@/components/texture-feature-chart";
 import { DisclaimerBanner } from "@/components/layout/disclaimer-banner";
 import { ApiError, imageApi, reportsApi, triggerDownload, type ImagePredictResult } from "@/lib/api";
 import { riskTier } from "@/lib/utils";
@@ -306,6 +307,14 @@ export function UploadImage() {
                     </CardHeader>
                     <CardContent className="text-sm leading-relaxed">
                       {narrativeFor(current.predicted_class, current.probability_malignant, current.is_demo)}
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>GLCM texture features (this image)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <TextureFeatureChart features={current.texture_features} />
                     </CardContent>
                   </Card>
                   <div className="flex gap-2">

@@ -80,12 +80,25 @@ export const tabularApi = {
     }).then((r) => handle<{ weights: { feature: string; weight: number }[] }>(r)),
 };
 
+export interface TextureFeatures {
+  glcm_contrast: number;
+  glcm_homogeneity: number;
+  glcm_energy: number;
+  glcm_correlation: number;
+  glcm_dissimilarity: number;
+  glcm_ASM: number;
+  canny_edge_density: number;
+  sobel_mean: number;
+  sobel_std: number;
+}
+
 export interface ImagePredictResult {
   predicted_class: "Benign" | "Malignant";
   probability_malignant: number;
   preprocessed_png_base64: string;
   gradcam_png_base64: string;
   model_key: string;
+  texture_features: TextureFeatures;
   is_demo: boolean;
   filename: string;
 }
@@ -123,6 +136,7 @@ export interface MammographyPredictResult {
   gradcam_png_base64: string;
   model_key: string;
   explanation: MammographyExplanation;
+  texture_features: TextureFeatures;
   is_demo: boolean;
   filename: string;
 }

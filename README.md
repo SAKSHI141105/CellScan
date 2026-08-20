@@ -112,6 +112,7 @@ python -m scripts.train_image
 # UI/exports — see Design decisions below for why. --target histopathology
 # or --target mammography to build just one.
 python -m scripts.generate_demo_weights
+# (same thing, more memorable name: python -m scripts.setup_demo_environment)
 
 # unit tests
 pytest
@@ -145,6 +146,10 @@ npm run dev
 ```
 
 Either way, open `http://localhost:5173` — not :8000, that's the bare API.
+You'll land on a sign-in page first (mock auth — any name, any 6-digit MFA
+code, pick whichever role/hospital-network from the dropdowns; nothing is
+actually checked, see Design decisions below for what this is and isn't).
+
 The Clinical Data page works immediately
 even before you've run `train_tabular.py` — the API falls back to a quick
 untuned RandomForest trained in-memory so the app is never a dead end on a
@@ -399,6 +404,27 @@ output has no reason to look like a real mask yet) rather than something
 that looks plausible, which is itself a reasonably honest signal that
 you're looking at a demo prediction if the labeling elsewhere weren't
 already unmissable.
+
+**The login page is a mock, on purpose, and says so.** `/login`
+(`frontend/src/contexts/auth-context.tsx`) accepts any name and any 6-digit
+code — there's no backend session, no password check, nothing gating real
+access. It exists because "clinical decision support platform" reads as an
+institutional product with a sign-in flow, and a dashboard that just opens
+with no portal doesn't read that way — but building a *convincing-looking*
+fake auth screen without labeling it as fake would be actively
+irresponsible for anything adjacent to a medical tool, so the banner on the
+form says exactly what it is. If this ever needs to gate something real,
+this whole module gets replaced, not extended.
+
+**The GLCM texture chart is real per-image math, not a canned example.**
+Both the histopathology and mammography prediction responses now include
+`texture_features` — the same `extract_classical_features()` used in the
+tabular clustering pipeline (`src/feature_engineering/texture_features.py`),
+run against the actual preprocessed pixels of whatever was just uploaded.
+Feeding it pure random noise during testing produced GLCM contrast in the
+thousands (expected — noise has no spatial coherence at all), which is a
+decent sanity check that it's really reading the image and not returning a
+fixed example.
 
 ## Testing
 
