@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api.routers import clusters, image, reports, tabular
+from src.api.routers import clusters, image, mammography, reports, tabular
 from src.utils.logging_setup import get_logger
 
 logger = get_logger(__name__)
@@ -35,6 +35,7 @@ app.add_middleware(
 
 app.include_router(tabular.router)
 app.include_router(image.router)
+app.include_router(mammography.router)
 app.include_router(reports.router)
 app.include_router(clusters.router)
 

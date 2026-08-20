@@ -12,6 +12,14 @@ imbalanced-learn>=0.11
 # Deep learning
 tensorflow>=2.14,<2.17
 
+# Mammography inference (src/models/mammography/, src/services/mammography_service.py) —
+# CPU wheels by default, see research/mammography_generalization/requirements.txt
+# for the GPU index-url swap if training there
+torch>=2.2
+torchvision>=0.17
+timm>=0.9.16
+pydicom>=2.4
+
 # Image processing
 opencv-python-headless>=4.8
 scikit-image>=0.21

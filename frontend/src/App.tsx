@@ -4,6 +4,7 @@ import { Layout } from "@/components/layout/layout";
 import { Home } from "@/pages/home";
 import { ClinicalData } from "@/pages/clinical-data";
 import { UploadImage } from "@/pages/upload-image";
+import { Mammography } from "@/pages/mammography";
 import { ModelPerformance } from "@/pages/model-performance";
 import { ClusterExplorer } from "@/pages/cluster-explorer";
 import { About } from "@/pages/about";
@@ -17,6 +18,7 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/clinical-data" element={<ClinicalData />} />
             <Route path="/upload-image" element={<UploadImage />} />
+            <Route path="/mammography" element={<Mammography />} />
             <Route path="/model-performance" element={<ModelPerformance />} />
             <Route path="/cluster-explorer" element={<ClusterExplorer />} />
             <Route path="/about" element={<About />} />

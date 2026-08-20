@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Activity, FileSpreadsheet, Image as ImageIcon, Info, LayoutDashboard, ScatterChart } from "lucide-react";
+import { Activity, FileSpreadsheet, Image as ImageIcon, Info, LayoutDashboard, ScanLine, ScatterChart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -7,6 +7,7 @@ const NAV = [
   { to: "/", label: "Overview", icon: LayoutDashboard, end: true },
   { to: "/clinical-data", label: "Clinical Data", icon: FileSpreadsheet },
   { to: "/upload-image", label: "Upload Image", icon: ImageIcon },
+  { to: "/mammography", label: "Mammography", icon: ScanLine },
   { to: "/model-performance", label: "Model Performance", icon: Activity },
   { to: "/cluster-explorer", label: "Cluster Explorer", icon: ScatterChart },
   { to: "/about", label: "About", icon: Info },

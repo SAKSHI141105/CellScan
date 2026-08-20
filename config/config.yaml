@@ -63,6 +63,21 @@ image:
   transfer_backbone: resnet50   # resnet50 | efficientnetb0 | vgg16
   fine_tune_last_n_layers: 20
 
+mammography:
+  # 512, not 224 — a small crop throws away the fine calcification detail
+  # this pipeline exists to pick up on. Matches the default in
+  # research/mammography_generalization/configs/*.yaml.
+  img_size: 512
+  clahe_clip_limit: 2.0
+  clahe_tile_grid: [8, 8]
+  denoise_method: median
+  denoise_kernel: 3
+  backbone: resnet50
+  decoder_channels: [256, 128, 64, 32]
+  checkpoint_candidates:
+    - data/models/mammography/lesion_guided_resnet50.pt   # a real trained checkpoint, if you have one
+    - data/models/mammography/demo_lesion_guided_resnet50.pt   # scripts/generate_demo_weights.py output
+
 clustering:
   kmeans_k: 2
   dbscan_eps: 1.5

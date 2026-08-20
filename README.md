@@ -105,10 +105,12 @@ python -m scripts.train_tabular
 # image pipeline (needs the dataset — see below)
 python -m scripts.train_image
 
-# don't want to wait on the dataset download to try the Upload Image page?
-# generates an ImageNet-only checkpoint (no histopathology training at all) so
-# the upload -> Grad-CAM -> report flow works end to end. Clearly labeled
-# "DEMO" everywhere in the UI/exports — see Design decisions below for why.
+# don't want to wait on a dataset download to try the Upload Image or
+# Mammography pages? generates ImageNet-only checkpoints for both (no
+# histopathology/mammography training at all) so the upload -> Grad-CAM ->
+# report flow works end to end. Clearly labeled "DEMO" everywhere in the
+# UI/exports — see Design decisions below for why. --target histopathology
+# or --target mammography to build just one.
 python -m scripts.generate_demo_weights
 
 # unit tests
@@ -179,16 +181,20 @@ src/
   feature_engineering/       correlation-based feature selection, GLCM/edge features
   models/                    clustering, autoencoders, the 5-model tabular zoo,
                               custom CNN + transfer learning
-  explainability/            SHAP + LIME (tabular), Grad-CAM (image)
+  models/mammography/         PyTorch lesion-guided ResNet50 — a same-architecture
+                              port of research/mammography_generalization's model
+                              (see Research module below for why it's a port, not
+                              an import)
+  explainability/            SHAP + LIME (tabular), Grad-CAM (image + mammography)
   services/                  framework-agnostic prediction + explanation logic
-                              (tabular_service, image_service, report_service) —
-                              the layer the API calls into
+                              (tabular_service, image_service, mammography_service,
+                              report_service) — the layer the API calls into
   api/                       FastAPI app — main.py + routers/ (tabular, image,
-                              reports, clusters)
+                              mammography, reports, clusters)
   utils/                     config loader, logging, shared metrics
 frontend/                    React + TypeScript + Vite + Tailwind UI
   src/pages/                 one file per route (clinical data, upload image,
-                              model performance, cluster explorer, about)
+                              mammography, model performance, cluster explorer, about)
   src/components/ui/         hand-rolled component primitives (button, card,
                               tabs, table, dropzone, animated number, spotlight card)
   src/contexts/theme-context.tsx   light/dark/system theme provider
@@ -211,33 +217,37 @@ generalize better across scanners/institutions (CBIS-DDSM → zero-shot on
 VinDr-Mammo/INbreast), versus a classification-only baseline trained the
 same way otherwise.
 
-It's kept structurally separate from the main app on purpose:
+It's kept structurally separate as its own venv/tests/training pipeline —
+different question (cross-dataset generalization, not single-dataset
+classification), different training/eval workflow (`python train.py
+--config ...` from the terminal, not something a web request drives) — but
+the **model architecture is now also served live** from the dashboard's
+Mammography page, backed by `src/models/mammography/` and
+`src/services/mammography_service.py` in the main app.
 
-- **Different modality and question.** The main app classifies WDBC tabular
-  records and histopathology *microscopy* patches. This module works on
-  mammography *X-rays* and asks a cross-dataset generalization question,
-  not a single-dataset classification one — there's no shared model,
-  dataset, or code path between them, so merging the code wouldn't make
-  either half simpler.
-- **Different, much heavier dependency stack.** PyTorch + `timm` +
-  `pydicom` + CPU/CUDA wheel selection vs. the main app's
-  scikit-learn/TensorFlow/FastAPI stack. Sharing one `requirements.txt` and
-  one venv between them would mean everyone installs both stacks (and picks
-  a CUDA/CPU torch build) just to run either one.
-- **No web UI.** It's a training/evaluation research pipeline run from the
-  terminal (`python train.py --config ...`), not something with a page in
-  the dashboard — there's nothing to route to from the React frontend yet,
-  since there's no trained mammography checkpoint or served inference
-  endpoint for it to call.
+That inference surface is a same-architecture *port* of the research
+pipeline's model, not a Python import of it — both this app and the
+research pipeline define a top-level `src` package, so importing one into
+the other's process would collide. `src/models/mammography/backbone.py` and
+`lesion_guided_model.py` are structurally identical copies of their
+`research/mammography_generalization/src/models/` counterparts (same
+layers, same names), which means a checkpoint produced by
+`research/mammography_generalization/train.py` loads directly into the
+dashboard's inference path — you train there, you serve here, without a
+conversion step. If you change the architecture in one place, change it in
+the other, or checkpoints stop being interchangeable (there's no test
+enforcing this yet — worth adding if the architecture starts moving).
 
-It lives in this repo (not a separate one) because it's the same overall
-"breast cancer ML" effort and the same person maintaining it — separate
-enough to isolate, not separate enough to need its own repo and its own
-GitHub history to track down later. See
+`python -m scripts.generate_demo_weights --target mammography` gets the
+Mammography page working immediately with ImageNet-only weights (see
+[Design decisions](#design-decisions--trade-offs) for how that's labeled).
+For a real checkpoint, train via the research pipeline —
 [research/mammography_generalization/README.md](research/mammography_generalization/README.md)
-for its own setup, architecture, and data-access instructions — none of
-CBIS-DDSM/INbreast/VinDr-Mammo are simple downloads, and that's documented
-there rather than repeated here.
+covers its own setup, architecture, and the CBIS-DDSM/INbreast/VinDr-Mammo
+data-access instructions (none of them are simple downloads) — then point
+`config/config.yaml`'s `mammography.checkpoint_candidates` at the resulting
+`.pt` file (or drop it at `data/models/mammography/lesion_guided_resnet50.pt`,
+the default first candidate).
 
 ## Design decisions / trade-offs
 
@@ -373,6 +383,22 @@ instead of capturing it — see `src/models/image_cnn.py`. Worth calling out
 because it's the kind of bug that's invisible until someone actually reloads
 a saved model in a new process, which nothing in this project had done
 before generating demo weights forced the issue.
+
+**Mammography's "clinical indicators" are derived, not fabricated.** The
+`explanation` block returned alongside a mammography prediction
+(`estimated_lesion_area_fraction`, `attention_concentration`) isn't invented
+copy — the first is the fraction of the model's own segmentation-decoder
+output above threshold, the second is what share of the Grad-CAM heatmap's
+total energy sits in its hottest 10% of pixels (a real measure of "is
+attention localized on one structure or smeared across the image"). Both
+are computed straight from the model's actual outputs for that image. They're
+still not clinical measurements in any validated sense — with the demo
+checkpoint specifically, an untrained decoder head means
+`estimated_lesion_area_fraction` reliably comes back near 100% (its sigmoid
+output has no reason to look like a real mask yet) rather than something
+that looks plausible, which is itself a reasonably honest signal that
+you're looking at a demo prediction if the labeling elsewhere weren't
+already unmissable.
 
 ## Testing
 

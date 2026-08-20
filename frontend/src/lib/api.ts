@@ -109,6 +109,36 @@ export const imageApi = {
   },
 };
 
+export interface MammographyExplanation {
+  predicted_probability: number;
+  estimated_lesion_area_fraction: number;
+  attention_concentration: number;
+  summary: string;
+}
+
+export interface MammographyPredictResult {
+  predicted_class: "Benign" | "Malignant";
+  probability_malignant: number;
+  preprocessed_png_base64: string;
+  gradcam_png_base64: string;
+  model_key: string;
+  explanation: MammographyExplanation;
+  is_demo: boolean;
+  filename: string;
+}
+
+export const mammographyApi = {
+  status: () => fetch(`${BASE}/mammography/status`).then((r) => handle<{ available: boolean; is_demo: boolean }>(r)),
+
+  predictBatch: (files: File[]) => {
+    const form = new FormData();
+    files.forEach((f) => form.append("files", f));
+    return fetch(`${BASE}/mammography/predict-batch`, { method: "POST", body: form }).then((r) =>
+      handle<{ results: MammographyPredictResult[]; n_malignant: number; n_benign: number }>(r)
+    );
+  },
+};
+
 export interface ModelMetrics {
   name: string;
   accuracy: number;
