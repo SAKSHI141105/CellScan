@@ -92,7 +92,7 @@ def bgr_to_png_base64(img_bgr: np.ndarray) -> str:
 
 def predict(preprocessed_img: np.ndarray) -> dict | None:
     from src.explainability.gradcam import explain_prediction
-    from src.feature_engineering.texture_features import extract_classical_features
+    from src.feature_engineering.texture_features import extract_classical_features, pixel_intensity_histogram
 
     model, model_key, is_demo = load_image_model()
     if model is None:
@@ -106,6 +106,7 @@ def predict(preprocessed_img: np.ndarray) -> dict | None:
     # real per-image GLCM/edge features, not a canned example — computed
     # straight off the actual preprocessed pixels the model just scored
     texture_features = extract_classical_features(preprocessed_img)
+    pixel_histogram = pixel_intensity_histogram(preprocessed_img)
 
     return {
         "predicted_class": predicted_class,
@@ -114,5 +115,6 @@ def predict(preprocessed_img: np.ndarray) -> dict | None:
         "gradcam_png_base64": bgr_to_png_base64(overlay),
         "model_key": model_key,
         "texture_features": texture_features,
+        "pixel_histogram": pixel_histogram,
         "is_demo": is_demo,
     }

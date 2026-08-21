@@ -11,15 +11,34 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routers import clusters, image, mammography, reports, tabular
+from src.services import image_service, mammography_service
 from src.utils.logging_setup import get_logger
 
 logger = get_logger(__name__)
 
 
+def _warm_image_models():
+    # TensorFlow's import alone takes 15-20s on a cold process — lazily
+    # eating that cost on someone's *first* prediction request looks
+    # indistinguishable from a hung/broken server from the browser side.
+    # Loading both model services here means that cost lands during server
+    # boot (visible in the startup logs) instead of during a user's first
+    # upload.
+    try:
+        image_service.load_image_model()
+    except Exception:
+        logger.exception("Histopathology model warmup failed — first real request will retry and surface the error")
+    try:
+        mammography_service.load_mammography_model()
+    except Exception:
+        logger.exception("Mammography model warmup failed — first real request will retry and surface the error")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # daemon thread so a slow/failed warmup never blocks shutdown
+    # daemon threads so a slow/failed warmup never blocks shutdown
     threading.Thread(target=clusters.warm_projection_cache, daemon=True).start()
+    threading.Thread(target=_warm_image_models, daemon=True).start()
     yield
 
 

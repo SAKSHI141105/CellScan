@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { StagedLoader } from "@/components/ui/staged-loader";
 import { RiskGauge } from "@/components/ui/risk-gauge";
 import { TextureFeatureChart } from "@/components/texture-feature-chart";
+import { PixelHistogramChart } from "@/components/pixel-histogram-chart";
+import { ZoomableImage } from "@/components/zoomable-image";
 import { DisclaimerBanner } from "@/components/layout/disclaimer-banner";
 import { ApiError, imageApi, reportsApi, triggerDownload, type ImagePredictResult } from "@/lib/api";
 import { riskTier } from "@/lib/utils";
@@ -255,77 +257,74 @@ export function UploadImage() {
             <div className="space-y-4">
               <SpecimenHeader filename={current.filename} timestamp={analyzedAt} modelKey={current.model_key} isDemo={current.is_demo} />
 
+              {/* Top — enlarged, zoomable side-by-side scan inspection */}
+              <div className="grid gap-3 sm:grid-cols-3">
+                <ZoomableImage src={currentPreviewUrl} label="Raw uploaded scan" />
+                <ZoomableImage
+                  src={`data:image/png;base64,${current.preprocessed_png_base64}`}
+                  label="Grayscale + CLAHE"
+                  caption="processed input"
+                />
+                <ZoomableImage
+                  src={`data:image/png;base64,${current.gradcam_png_base64}`}
+                  label="Grad-CAM overlay"
+                  caption="model attention"
+                />
+              </div>
+
+              {/* Middle — high-contrast diagnostic summary */}
+              <Card>
+                <CardContent className="grid gap-6 pt-5 sm:grid-cols-[auto_1fr] sm:items-center">
+                  <div className="flex flex-col items-center gap-2">
+                    <RiskGauge probability={current.probability_malignant} />
+                    <Badge tier={riskTier(current.probability_malignant).tier} className="text-sm">
+                      {current.predicted_class}
+                    </Badge>
+                    {current.is_demo && <Badge tier="high">DEMO — not a real prediction</Badge>}
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Clinical summary
+                    </div>
+                    <p className="mt-1.5 text-sm leading-relaxed">
+                      {narrativeFor(current.predicted_class, current.probability_malignant, current.is_demo)}
+                    </p>
+                    <div className="mt-4 flex gap-2">
+                      <Button variant="outline" size="sm" loading={downloading === "csv"} onClick={() => download("csv")}>
+                        <Download className="h-3.5 w-3.5" /> CSV report
+                      </Button>
+                      <Button variant="outline" size="sm" loading={downloading === "pdf"} onClick={() => download("pdf")}>
+                        <FileDown className="h-3.5 w-3.5" /> Download clinical report (PDF)
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Bottom — per-image analytics */}
               <div className="grid gap-4 lg:grid-cols-2">
-                {/* left column — original alongside the Grad-CAM overlay */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Original vs. Grad-CAM overlay</CardTitle>
+                    <CardTitle>Pixel intensity distribution (this scan)</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
-                      <figure>
-                        <img src={currentPreviewUrl} className="aspect-square w-full rounded-lg border border-border object-cover" />
-                        <figcaption className="mt-1.5 text-xs text-muted-foreground">Original upload</figcaption>
-                      </figure>
-                      <figure>
-                        <img
-                          src={`data:image/png;base64,${current.gradcam_png_base64}`}
-                          className="aspect-square w-full rounded-lg border border-border object-cover"
-                        />
-                        <figcaption className="mt-1.5 text-xs text-muted-foreground">Grad-CAM heatmap</figcaption>
-                      </figure>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Warmer regions in the heatmap contributed more strongly to the predicted class.
+                  <CardContent>
+                    <PixelHistogramChart histogram={current.pixel_histogram} />
+                    <p className="mt-2 flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                      <FileImage className="mt-0.5 h-3 w-3 shrink-0" />
+                      Computed from this image's own post-CLAHE pixels. Not shown: a comparison against
+                      benign/malignant reference distributions — this environment has no real trained-on dataset
+                      to compute honest class-conditional baselines from.
                     </p>
-                    <div className="flex items-center gap-2 border-t border-border pt-3">
-                      <FileImage className="h-3.5 w-3.5 text-muted-foreground" />
-                      <img
-                        src={`data:image/png;base64,${current.preprocessed_png_base64}`}
-                        className="h-12 w-12 rounded border border-border object-cover"
-                      />
-                      <span className="text-xs text-muted-foreground">Preprocessed input (grayscale + CLAHE + denoise)</span>
-                    </div>
                   </CardContent>
                 </Card>
-
-                {/* right column — risk gauge, narrative, report actions */}
-                <div className="space-y-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Risk assessment</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-col items-center gap-2 pt-2">
-                      <RiskGauge probability={current.probability_malignant} />
-                      <p className="text-sm font-semibold">{current.predicted_class}</p>
-                      {current.is_demo && <Badge tier="high">DEMO — not a real prediction</Badge>}
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Clinical summary</CardTitle>
-                    </CardHeader>
-                    <CardContent className="text-sm leading-relaxed">
-                      {narrativeFor(current.predicted_class, current.probability_malignant, current.is_demo)}
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>GLCM texture features (this image)</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <TextureFeatureChart features={current.texture_features} />
-                    </CardContent>
-                  </Card>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" loading={downloading === "csv"} onClick={() => download("csv")}>
-                      <Download className="h-3.5 w-3.5" /> CSV report
-                    </Button>
-                    <Button variant="outline" size="sm" loading={downloading === "pdf"} onClick={() => download("pdf")}>
-                      <FileDown className="h-3.5 w-3.5" /> Download clinical report (PDF)
-                    </Button>
-                  </div>
-                </div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>GLCM texture features (this image)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <TextureFeatureChart features={current.texture_features} />
+                  </CardContent>
+                </Card>
               </div>
             </div>
           )}

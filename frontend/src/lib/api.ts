@@ -92,6 +92,13 @@ export interface TextureFeatures {
   sobel_std: number;
 }
 
+export interface PixelHistogram {
+  bin_centers: number[];
+  counts: number[];
+  mean_intensity: number;
+  std_intensity: number;
+}
+
 export interface ImagePredictResult {
   predicted_class: "Benign" | "Malignant";
   probability_malignant: number;
@@ -99,6 +106,7 @@ export interface ImagePredictResult {
   gradcam_png_base64: string;
   model_key: string;
   texture_features: TextureFeatures;
+  pixel_histogram: PixelHistogram;
   is_demo: boolean;
   filename: string;
 }
@@ -137,6 +145,7 @@ export interface MammographyPredictResult {
   model_key: string;
   explanation: MammographyExplanation;
   texture_features: TextureFeatures;
+  pixel_histogram: PixelHistogram;
   is_demo: boolean;
   filename: string;
 }

@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { StagedLoader } from "@/components/ui/staged-loader";
 import { RiskGauge } from "@/components/ui/risk-gauge";
 import { TextureFeatureChart } from "@/components/texture-feature-chart";
+import { PixelHistogramChart } from "@/components/pixel-histogram-chart";
+import { ZoomableImage } from "@/components/zoomable-image";
 import { DisclaimerBanner } from "@/components/layout/disclaimer-banner";
 import { ApiError, mammographyApi, reportsApi, triggerDownload, type MammographyPredictResult } from "@/lib/api";
 import { riskTier } from "@/lib/utils";
@@ -102,6 +104,8 @@ export function Mammography() {
   }
 
   const current = results?.[selected];
+  const currentFile = files[selected];
+  const currentRawPreviewUrl = currentFile?.type.startsWith("image/") ? previewUrls[selected] : null;
 
   return (
     <div>
@@ -240,85 +244,91 @@ export function Mammography() {
                 </div>
               </div>
 
+              {/* Top — enlarged, zoomable side-by-side scan inspection */}
+              <div className={`grid gap-3 ${currentRawPreviewUrl ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+                {currentRawPreviewUrl && <ZoomableImage src={currentRawPreviewUrl} label="Raw uploaded scan" />}
+                <ZoomableImage
+                  src={`data:image/png;base64,${current.preprocessed_png_base64}`}
+                  label="Grayscale + CLAHE"
+                  caption="processed input"
+                />
+                <ZoomableImage
+                  src={`data:image/png;base64,${current.gradcam_png_base64}`}
+                  label="Grad-CAM overlay"
+                  caption="model attention"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Warmer regions in the heatmap contributed more strongly to the predicted class — for a
+                lesion-guided model this should concentrate on mass/calcification regions rather than scanner
+                artifacts.
+                {!currentRawPreviewUrl && " (Raw scan preview unavailable for DICOM input — browsers can't decode it directly.)"}
+              </p>
+
+              {/* Middle — high-contrast diagnostic summary */}
+              <Card>
+                <CardContent className="grid gap-6 pt-5 sm:grid-cols-[auto_1fr] sm:items-center">
+                  <div className="flex flex-col items-center gap-2">
+                    <RiskGauge probability={current.probability_malignant} />
+                    <Badge tier={riskTier(current.probability_malignant).tier} className="text-sm">
+                      {current.predicted_class}
+                    </Badge>
+                    {current.is_demo && <Badge tier="high">DEMO — not a real prediction</Badge>}
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Clinical indicators
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                      <span>
+                        Estimated lesion area{" "}
+                        <strong className="font-mono-num">
+                          {(current.explanation.estimated_lesion_area_fraction * 100).toFixed(1)}%
+                        </strong>
+                      </span>
+                      <span>
+                        Attention concentration{" "}
+                        <strong className="font-mono-num">
+                          {(current.explanation.attention_concentration * 100).toFixed(1)}%
+                        </strong>
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{current.explanation.summary}</p>
+                    <div className="mt-4 flex gap-2">
+                      <Button variant="outline" size="sm" loading={downloading === "csv"} onClick={() => download("csv")}>
+                        <Download className="h-3.5 w-3.5" /> CSV report
+                      </Button>
+                      <Button variant="outline" size="sm" loading={downloading === "pdf"} onClick={() => download("pdf")}>
+                        <FileDown className="h-3.5 w-3.5" /> Download clinical report (PDF)
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Bottom — per-image analytics */}
               <div className="grid gap-4 lg:grid-cols-2">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Preprocessed vs. Grad-CAM overlay</CardTitle>
+                    <CardTitle>Pixel intensity distribution (this scan)</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
-                      <figure>
-                        <img
-                          src={`data:image/png;base64,${current.preprocessed_png_base64}`}
-                          className="aspect-square w-full rounded-lg border border-border object-cover"
-                        />
-                        <figcaption className="mt-1.5 text-xs text-muted-foreground">
-                          Preprocessed (grayscale + CLAHE + denoise)
-                        </figcaption>
-                      </figure>
-                      <figure>
-                        <img
-                          src={`data:image/png;base64,${current.gradcam_png_base64}`}
-                          className="aspect-square w-full rounded-lg border border-border object-cover"
-                        />
-                        <figcaption className="mt-1.5 text-xs text-muted-foreground">Grad-CAM heatmap</figcaption>
-                      </figure>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Warmer regions contributed more strongly to the predicted class — for a lesion-guided model
-                      this should concentrate on mass/calcification regions rather than scanner artifacts.
+                  <CardContent>
+                    <PixelHistogramChart histogram={current.pixel_histogram} />
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Computed from this image's own post-CLAHE pixels. Not shown: a comparison against
+                      benign/malignant reference distributions — this environment has no real trained-on dataset
+                      to compute honest class-conditional baselines from.
                     </p>
                   </CardContent>
                 </Card>
-
-                <div className="space-y-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Risk assessment</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-col items-center gap-2 pt-2">
-                      <RiskGauge probability={current.probability_malignant} />
-                      <p className="text-sm font-semibold">{current.predicted_class}</p>
-                      {current.is_demo && <Badge tier="high">DEMO — not a real prediction</Badge>}
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Clinical indicators</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Estimated lesion area</span>
-                        <span className="font-mono-num font-semibold">
-                          {(current.explanation.estimated_lesion_area_fraction * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Attention concentration</span>
-                        <span className="font-mono-num font-semibold">
-                          {(current.explanation.attention_concentration * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                      <p className="pt-2 leading-relaxed text-muted-foreground">{current.explanation.summary}</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>GLCM texture features (this scan)</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <TextureFeatureChart features={current.texture_features} />
-                    </CardContent>
-                  </Card>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" loading={downloading === "csv"} onClick={() => download("csv")}>
-                      <Download className="h-3.5 w-3.5" /> CSV report
-                    </Button>
-                    <Button variant="outline" size="sm" loading={downloading === "pdf"} onClick={() => download("pdf")}>
-                      <FileDown className="h-3.5 w-3.5" /> Download clinical report (PDF)
-                    </Button>
-                  </div>
-                </div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>GLCM texture features (this scan)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <TextureFeatureChart features={current.texture_features} />
+                  </CardContent>
+                </Card>
               </div>
             </div>
           )}

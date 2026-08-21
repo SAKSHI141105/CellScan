@@ -127,9 +127,10 @@ def predict(preprocessed_img: np.ndarray) -> dict:
     heatmap = cam(tensor_for_cam)
     overlay = overlay_heatmap(preprocessed_img, heatmap)
 
-    from src.feature_engineering.texture_features import extract_classical_features
+    from src.feature_engineering.texture_features import extract_classical_features, pixel_intensity_histogram
 
     texture_features = extract_classical_features(preprocessed_img)
+    pixel_histogram = pixel_intensity_histogram(preprocessed_img)
     concentration = _attention_concentration(heatmap)
 
     explanation = {
@@ -156,5 +157,6 @@ def predict(preprocessed_img: np.ndarray) -> dict:
         "model_key": f"mammography_lesion_guided_{MAMMO_CFG['backbone']}",
         "explanation": explanation,
         "texture_features": texture_features,
+        "pixel_histogram": pixel_histogram,
         "is_demo": is_demo,
     }

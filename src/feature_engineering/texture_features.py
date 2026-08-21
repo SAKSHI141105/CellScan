@@ -64,3 +64,21 @@ def batch_extract(images: np.ndarray) -> "pd.DataFrame":
 
     rows = [extract_classical_features(img) for img in images]
     return pd.DataFrame(rows)
+
+
+def pixel_intensity_histogram(img_float: np.ndarray, n_bins: int = 32) -> dict:
+    """Real per-image pixel-intensity distribution (post-CLAHE/denoise) — not
+    a fabricated "benign vs. malignant baseline" overlay. We don't have a
+    real trained-on dataset in this repo to compute honest class-conditional
+    reference distributions from, so this deliberately stays a single-image
+    histogram rather than pretending to compare against reference curves.
+    """
+    img_uint8 = (np.clip(img_float, 0, 1) * 255).astype(np.uint8)
+    counts, edges = np.histogram(img_uint8, bins=n_bins, range=(0, 255))
+    bin_centers = ((edges[:-1] + edges[1:]) / 2).round(1)
+    return {
+        "bin_centers": bin_centers.tolist(),
+        "counts": counts.tolist(),
+        "mean_intensity": round(float(img_uint8.mean()), 2),
+        "std_intensity": round(float(img_uint8.std()), 2),
+    }
